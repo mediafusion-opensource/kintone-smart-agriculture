@@ -128,7 +128,7 @@ This license shall be governed by the laws of Japan.
 
 Media Fusion Inc.
 Website: https://www.mediafusion.co.jp/
-GitHub: [GitHub URL]
+GitHub: https://github.com/mediafusion-opensource/kintone-smart-agriculture
 
 本ライセンスに関するご質問、商用利用の許可申請、技術サポートのご依頼は
 上記連絡先までお問い合わせください。

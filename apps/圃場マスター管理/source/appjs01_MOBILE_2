@@ -1,0 +1,39 @@
+(($) => {
+  'use strict';
+  const INTEGER_ERROR = '整数を入力してください。';
+  const FORM_DATA = cybozu.data.page['FORM_DATA'];
+  const ELEMENT_FIELD_ID = {};
+  const fieldList = FORM_DATA.schema.table.fieldList;
+  for (const fieldId of Object.keys(fieldList)) {
+    ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+  }
+  for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+    ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+    const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+  }
+  kintone.events.on([
+    'app.record.create.submit',
+    'app.record.edit.submit',
+    'mobile.app.record.create.submit',
+    'mobile.app.record.edit.submit',
+  ], (event) => {
+    $('.error-cybozu-customize').remove();
+    const record = event.record;
+    const table = record['詳細'].value;
+    for (const [index, item] of table.entries()){
+      const row = item.value;
+      if (row['列数'].value && !Number.isInteger(+row['列数'].value)){
+        $(`.value-${ELEMENT_FIELD_ID['列数']}`).eq(index).append(`<div class="input-error-cybozu control-errors-content-gaia error-cybozu-customize">${INTEGER_ERROR}</div>`);
+        return false;
+      }
+      if (row['株数'].value && !Number.isInteger(+row['株数'].value)){
+        $(`.value-${ELEMENT_FIELD_ID['株数']}`).eq(index).append(`<div class="input-error-cybozu control-errors-content-gaia error-cybozu-customize">${INTEGER_ERROR}</div>`);
+        return false;
+      }
+    }
+    return event;
+  });
+})(jQuery);

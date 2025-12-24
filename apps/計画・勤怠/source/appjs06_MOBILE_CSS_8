@@ -1,0 +1,32 @@
+@charset "UTF-8";
+.mf-weekpicker.datepicker .datepicker-days tr td.active ~ td,
+.mf-weekpicker.datepicker .datepicker-days tr td.active{
+    color: black !important;
+    background: transparent !important;
+    text-shadow: none;
+    background-color: #f0f0f0 !important;
+    border-radius: 0px;
+    border-top: 1px solid;
+    border-bottom: 1px solid;
+} 
+.datepicker td {
+  padding: 5px !important;
+  width: 40px !important;
+}
+.datepicker {
+  font-size: 1.4rem;
+  width: 65%;
+}
+.datepicker-dropdown:before {
+  border-bottom-color: #ccc;
+}
+.dropdown-menu {
+  border: 2px solid #ccc;
+  box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.mf-weekpicker.datepicker .datepicker-days tr:hover td{
+  color: #000;
+  background: #e5e2e3;
+  border-radius: 0;
+} 

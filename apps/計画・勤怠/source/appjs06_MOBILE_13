@@ -1,0 +1,4 @@
+(() => {
+  const kintoneLoginUser = kintone.getLoginUser();
+  moment.tz.setDefault(kintoneLoginUser['timezone']);
+})();

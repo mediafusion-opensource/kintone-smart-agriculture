@@ -1,0 +1,179 @@
+/* 
+  mf-agri-services 
+*/ 
+(() => {
+  const WORK_APP_ID = kintone.app.getId();
+  const USER_EMPLOYEE_GROUP = 12;
+  const USER_ADMIN_GROUP = 13;
+  const USER_DEV_GROUP = 14;
+  
+  const WORK_STATUS_FIELD_CODE = '作業ステータス';
+  const WORK_STATUS_NOT_START = '未対応';
+  const WORK_STATUS_PROCESSING = '処理中';
+  const WORK_STATUS_COMPLETED = '完了';
+  const WORK_STATUS_ABNORMAL = '異常';
+  
+  const EMPLOYEE_ID_FIELD_CODE = '社員コード';
+  const EMPLOYEE_NAME_FIELD_CODE = '作業者名';
+  const PLAN_DATE_FIELD_CODE = '予定日';
+  const PLAN_START_DATE_TIME_FIELD_CODE = '計画_開始時刻';
+  const PLAN_END_DATE_TIME_FIELD_CODE = '計画_終了時刻';
+  const WORK_MASTER_ID_FIELD_CODE = '作業コード';
+  const WORK_MASTER_NAME_FIELD_CODE = '作業名';
+  const REMASK_FIELD_CODE = '備考';
+  const PERFORMANCE_UNIT_FIELD_CODE = '実績単位';
+  const CROP_FIELD_CODE = '作付';
+  const FIELD_FIELD_CODE = '圃場';
+  const VARIETY_FIELD_CODE = '品種';
+
+  const ACTUAL_EMPLOYEE_ID_FIELD_CODE = '実際_社員コード';
+  const ACTUAL_DATE_FIELD_CODE = '作業日';
+  const ACTUAL_START_DATE_TIME_FIELD_CODE = '実績_開始時刻';
+  const ACTUAL_END_DATE_TIME_FIELD_CODE = '実績_終了時刻';
+  const BREAK_TIME_FIELD_CODE = '休憩時間';
+  const TIME_SPENT_FIELD_CODE = '作業時間';
+  const PERFORMANCE_QUANTITY_FIELD_CODE = '実績数';
+  const TARGET_NOTI_FIELD_CODE = '対象通知';
+  const NOTI_CONTENT_FIELD_CODE = '通知内容';
+  
+  window.MF_AGRI_SERVICES = {
+    WORK_SERVICES: {
+      getListWorks: async ({
+        fieldSearch,
+        userSearch,
+        actualUserSearch,
+        workSearch,
+        cropSearch,
+        planStartDateTime,
+        planEndDateTime,
+        actualStartDateTime,
+        actualEndDateTime,
+        workStatus = []
+      }) => {
+        let arr = [];
+        if (fieldSearch) arr.push(`${FIELD_FIELD_CODE} = "${fieldSearch}"`);
+        if (userSearch) arr.push(`${EMPLOYEE_ID_FIELD_CODE} = "${userSearch}"`);
+        if (actualUserSearch) arr.push(`${ACTUAL_EMPLOYEE_ID_FIELD_CODE} = "${actualUserSearch}"`);
+        if (workSearch) arr.push(`${WORK_MASTER_ID_FIELD_CODE} = "${workSearch}"`);
+        if (cropSearch) arr.push(`${CROP_FIELD_CODE} = "${cropSearch}"`);
+        if (planStartDateTime) arr.push(`${PLAN_DATE_FIELD_CODE} >= "${moment(planStartDateTime).format('YYYY-MM-DD')}" and ${PLAN_START_DATE_TIME_FIELD_CODE} >= "${moment(planStartDateTime).format('HH:mm')}"`);
+        if (planEndDateTime) arr.push(`${PLAN_DATE_FIELD_CODE} <= "${moment(planEndDateTime).format('YYYY-MM-DD')}" and ${PLAN_END_DATE_TIME_FIELD_CODE} <= "${moment(planEndDateTime).format('HH:mm')}"`);
+        if (actualStartDateTime) arr.push(`${ACTUAL_DATE_FIELD_CODE} >= "${moment(actualStartDateTime).format('YYYY-MM-DD')}" and ${ACTUAL_START_DATE_TIME_FIELD_CODE} >= "${moment(actualStartDateTime).format('HH:mm')}"`)
+        if (actualEndDateTime) arr.push(`${ACTUAL_DATE_FIELD_CODE} <= "${moment(actualEndDateTime).format('YYYY-MM-DD')}" and ${ACTUAL_END_DATE_TIME_FIELD_CODE} <= "${moment(actualEndDateTime).format('HH:mm')}"`);
+        if (workStatus.length == 0) {
+          workStatus.push("");
+        }
+        let tmp = "";
+        for (const [index, item] of workStatus.entries()){
+          if (index == workStatus.length - 1){
+            tmp += `"${item}"`;  
+          }
+          else tmp += `"${item}", `;  
+        }
+        arr.push(`${WORK_STATUS_FIELD_CODE} in (${tmp})`)
+        
+        const query = arr.join(' and ');
+        console.log('query', query);
+        return MF_KINTONE_SERVICES.getAllRecords({app: WORK_APP_ID, query: query, size: 500});        
+      },
+      getGroupEvents: async (groupID, date, mode) => {
+        if (!["THIS_AND_ALL_FOLLOWING_EVENTS", "ALL_EVENTS_IN_THE_SERIES"].includes(mode)) return [];
+        let allRecords = [];
+        let lastID = 0;
+        const limit = 500;
+        const dateFormatted = moment(date).format("YYYY-MM-DD");
+        try {
+          while (true) {
+            let condition = "";
+            if (mode === "THIS_AND_ALL_FOLLOWING_EVENTS") {
+              condition = `予定日 >= "${dateFormatted}"`;
+            }
+            
+            const query = `グループID = "${groupID}" and $id > ${lastID} ${condition ? `and ${condition}` : ""} order by $id asc limit ${limit}`;
+            
+            const result = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', {
+                app: WORK_APP_ID,
+                query: query
+            });
+            
+            allRecords = allRecords.concat(result.records);
+            lastID = result.records[result.records.length - 1]['$id'].value;
+      
+            if (result.records.length < limit) {
+              break;
+            }
+          }
+          console.log('All records:', allRecords);
+          return allRecords; 
+        } catch (e) {
+          console.log(e);
+        }
+      },
+      getWorkById: async (recordId) => {
+        return MF_KINTONE_SERVICES.getRecord({app: WORK_APP_ID, id: recordId});
+      },
+      removeWorkById: async (recordId) => {
+        return MF_KINTONE_SERVICES.deleteRecords(WORK_APP_ID, [recordId])
+      },
+      updateEvents: async (records) => {
+        return new Promise((resolve, reject) => {
+          if (!Array.isArray(records) || records.length === 0) {
+              return reject(new Error("The records list is empty or invalid"));
+          }
+  
+          kintone.api(kintone.api.url('/k/v1/records', true), 'PUT', {
+            app: WORK_APP_ID,
+            records: records
+          }).then(response => {
+            resolve(response);
+          }).catch(error => {
+            reject(error);
+          });
+        });
+      }
+    },
+    USER_MASTER_SERVICES: {
+      getListUsers: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: USER_MASTER_APP_ID, size: 500});  
+      },
+      getUserPermissions: async (userCode) => {
+        const userGroups = (await MF_KINTONE_SERVICES.getUserGroups(userCode)).groups.map(o => +o.id);
+        return {
+          'PLAN_WORK': {
+            'VIEW': true,
+            'ADD': userGroups.includes(USER_ADMIN_GROUP) || userGroups.includes(USER_DEV_GROUP) ? true : false,
+            'EDIT': userGroups.includes(USER_ADMIN_GROUP) || userGroups.includes(USER_DEV_GROUP) ? true : false,
+            'DELETE': userGroups.includes(USER_ADMIN_GROUP) || userGroups.includes(USER_DEV_GROUP) ? true : false
+          },
+          'ACTUAL_WORK': {
+            'VIEW': true,
+            'ADD': true,
+            'EDIT': true,
+            'DELETE': true,
+            'OWNER_ONLY': (!userGroups.includes(USER_ADMIN_GROUP) && !userGroups.includes(USER_DEV_GROUP) && userGroups.includes(USER_EMPLOYEE_GROUP)) ? true : false
+          }
+        }
+      }
+    },
+    WORK_MASTER_SERVICES: {
+      getListUsers: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: WORK_MASTER_APP_ID, size: 500});  
+      }
+    },
+    FIELD_MASTER_SERVICES: {
+      getListFields: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: FIELD_MASTER_APP_ID, size: 500});  
+      }
+    },
+    CROP_MASTER_SERVICES: {
+      getListCrops: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: CROP_MASTER_APP_ID, size: 500});  
+      }
+    },
+    BREAK_TIME_SERVICES: {
+      getListBreakTimes: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: BREAK_TIME_APP_ID, size: 500});  
+      }
+    }
+  }
+})();

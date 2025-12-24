@@ -1,0 +1,162 @@
+// jQuery.noConflict();
+
+
+// (async function($, PLUGIN_ID) {
+//     "use strict";
+    
+//     const appId = kintone.app.getId();
+    
+//     let firstTimeAccess = true;
+
+//     const LBL_ADD_NEW_TIME = '計測タイミングを追加'
+//     const LBL_TIME_NAME = '測定タイミングの値'
+//     const MSG_CONFIRM_F5 = '新しい計測タイミングの値が追加されました。「OK」ボタンを押してください。'
+//     const MSG_DUPLICATE_TIME = '計測タイミングの値が存在しました'
+//     const FIELD_CODE = '計測タイミング'
+
+//     let currentProperties = []
+
+//     let htmlButtonAdd = 
+//     `
+//     <button id="btn-mng-time" class="btn btn-primary" type="button" title="`+LBL_ADD_NEW_TIME+`">`+LBL_ADD_NEW_TIME+`</button>
+//     `
+
+//     let htmlDialog = 
+//     `
+//     <div id="dialog-custome" class="model-loader">
+//         <div class="ocean-ui-dialog ocean-ui-dialog-confirm-cancel ocean-ui-dialog-confirm ocean-ui-dialog-transition" tabindex="0" role="dialog" aria-labelledby=":2c" style="top: 30%;">
+//             <div class="ocean-ui-dialog-title"><span class="ocean-ui-dialog-title-text" id=":2c" role="heading">DIALOG_TITLE</span><span class="ocean-ui-dialog-title-close dialog-close" role="button" tabindex="0" aria-label="Close"></span></div>
+//             <div class="ocean-ui-dialog-content" style="max-height: 618px; max-width: 2560px;">
+//                 <div class="ocean-ui-dialog-text-body">
+//                     <div class="control-gaia control-single_line_text-field-gaia wraper-add-new">
+//                         <div class="control-label-gaia" style=""><span>`+LBL_TIME_NAME+`</span></div>
+
+//                         <div class="control-value-gaia" style="overflow: visible;">
+//                             <div class="input-text-outer-cybozu">
+//                                 <input id="new-time-name" type="text" class="input-text-cybozu" autocomplete="off">
+//                             </div>
+//                         </div>
+//                     </div> 
+//                 </div>
+//             </div>
+//             <div class="ocean-ui-dialog-buttons gaia-argoui-dialog-buttons gaia-argoui-dialog-buttons-confirm">
+//                 <div class="gaia-argoui-dialog-buttons-left"><button name="cancel" type="button" class="gaia-argoui-dialog-buttons-normal dialog-close" style="user-select: none;">キャンセル</button></div>
+//                 <div class="gaia-argoui-dialog-buttons-right"><button name="ok" type="button" class="gaia-argoui-dialog-buttons-default" style="user-select: none;" id="confirm-yes">保存</button></div>
+//             </div>
+//         </div>
+//     </div>
+//     `
+
+
+//     kintone.events.on([
+//         'app.record.index.show',
+//     ], async (event) => {
+//         if (firstTimeAccess) {
+//             firstTimeAccess = !firstTimeAccess;
+//             $('.kintone-app-headermenu-space').append(htmlButtonAdd)
+//         }
+
+//         $('#btn-mng-time').click(function(e) {
+//             showConfirmDialog(
+//                 htmlDialog.replace('DIALOG_TITLE', LBL_ADD_NEW_TIME)
+//                 , async function() {
+//                     $('#dialog-custome').remove()
+//                 }, async function() {
+//                     await addOption()
+//                     // let result = await addOption()
+//                     // if (result == 0) {
+//                     //     return    
+//                     // }
+//                     // $('#dialog-custome').remove()
+//                 }
+//             );
+//         })
+
+//         return event
+//     });
+
+
+//     kintone.events.on([
+//         'app.record.index.edit.show',
+//     ], async (event) => {
+//         $('#btn-mng-time').hide()
+
+//         $('button.recordlist-cancel-gaia').click(function(e) {
+//             $('#btn-mng-time').show()
+//         })
+
+//         return event
+//     });
+
+
+//     async function addOption() {
+//         let newTime = $('input#new-time-name').val()
+
+//         // refresh list current options
+//         await getFormField()
+
+//         // Check duplicate option
+//         let keys = Object.keys(currentProperties[FIELD_CODE].options)
+//         if (keys.includes(newTime)) {
+//             alert(MSG_DUPLICATE_TIME)
+//             return;
+//         }
+
+//         try {
+//             currentProperties[FIELD_CODE].options[newTime] = {
+//                 index: keys.length,
+//                 label: newTime
+//             }
+//             let req = {
+//                 app: appId,
+//                 properties: currentProperties
+//             }
+//             await kintone.api(kintone.api.url('/k/v1/preview/app/form/fields.json', true), 'PUT', req)
+
+//             // Deploy App setting
+//             const reqDeployApp = {
+//                 apps: [{app: appId}],
+//                 revert: false
+//             }
+//             await kintone.api(kintone.api.url('/k/v1/preview/app/deploy.json'), 'POST', reqDeployApp)
+
+//             // Refresh page
+//             if (confirm(MSG_CONFIRM_F5) == true) {
+//                 await sleep(1000)
+//                 location.reload();
+//             } 
+//         } catch (error) {
+//             alert(error.message)
+//             console.log(error)
+//             return
+//         }
+//     }
+
+
+//     async function getFormField() {
+//         try {
+//             const resp = await kintone.api(kintone.api.url('/k/v1/app/form/fields.json', true), 'GET', {'app': appId})
+//             currentProperties = resp.properties
+//         } catch (error) {
+//             console.log(error)
+//             return
+//         }
+//     }
+
+//     function showConfirmDialog(htmlDialog, confirmNo, confirmYes) {
+//         $('#dialog-custome').remove()
+//         $('.kintone-app-headermenu-space').append(htmlDialog);
+
+//         $('.dialog-close').click(async function(e) {
+//             await confirmNo();
+//         })
+//         $('#confirm-yes').click(async function(e) {
+//             await confirmYes();
+//         })
+//     }
+    
+//     function sleep(ms) {
+//         return new Promise(resolve => setTimeout(resolve, ms));
+//     }
+
+// })(jQuery, kintone.$PLUGIN_ID);

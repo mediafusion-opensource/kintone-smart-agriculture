@@ -1,0 +1,88 @@
+/*
+  components
+*/
+'use strict';
+const hostname = window.location.hostname;
+const IFRAME_EVENTS = [
+  'PLAN_REGISTRATION_SUCCESS', 
+  'PLAN_REGISTRATION_FAILURE', 
+  'PLAN_EDIT_SUCCESS', 
+  'PLAN_EDIT_FAILURE', 
+  'PLAN_DELETION_SUCCESS', 
+  'PLAN_DELETION_FAILURE', 
+  'ACTUAL_REGISTRATION_SUCCESS', 
+  'ACTUAL_REGISTRATION_FAILURE', 
+  'ACTUAL_EDIT_SUCCESS', 
+  'ACTUAL_EDIT_FAILURE', 
+  'ACTUAL_DELETION_SUCCESS', 
+  'ACTUAL_DELETION_FAILURE'
+]
+class AddOrUpdateEventPopup {
+  constructor({eventId, date, employeeId, workId, crop, mode, isLogTime = false, groupAction = "THIS_EVENT"}){
+    this.eventId = eventId;
+    this.employeeId = employeeId;
+    this.date = date;
+    this.workId = workId;
+    this.crop = crop;
+    this.mode = mode;
+    this.isLogTime = isLogTime;
+    this.groupAction = groupAction;
+    
+    let params = `date=${moment(this.date).format('YYYY-MM-DD')}`;
+    if (this.employeeId) params += `&employeeId=${this.employeeId}`;
+    if (this.workId) params += `&workId=${this.workId}`;
+    if (this.crop) params += `&crop=${this.crop}`;
+    
+    if (this.mode === 'DUPLICATE'){
+      this.iframeSrc = `https://${hostname}/k/${PLAN_WORK_APP_ID}/edit?record=${this.eventId}&popup=true&isLogTime=${this.isLogTime}`;
+    }
+    else if (this.mode === 'ADD'){
+      this.iframeSrc = `https://${hostname}/k/${PLAN_WORK_APP_ID}/edit?${params}&popup=true&isLogTime=${this.isLogTime}`;
+    }
+    else if (this.eventId){
+      this.iframeSrc = `https://${hostname}/k/${PLAN_WORK_APP_ID}/show#record=${this.eventId}&mode=edit&popup=true&isLogTime=${this.isLogTime}&groupAction=${this.groupAction}`;
+    }
+    this.render();
+  }
+  async render(){
+    let currentObj = this;
+    jQuery('#eventPopup').remove();
+    jQuery("body").append(`
+      <div id="eventPopup" class="modal" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-lg" role="document" style="max-width: 80%; height: 85vh;">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title text-center">${['DUPLICATE', 'ADD'].includes(currentObj.mode)  ? '計画を登録' : '計画を編集・実績を登録'}</h5>
+              <button type="button" class="close" id="closeEventPopup" data-dismiss="modal" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+            <div class="">
+              <div class="">
+                <iframe id="add-or-update-event-plan-popup" src="${currentObj.iframeSrc}" width="100%" frameborder="0" scrolling="auto" style="visibility: hidden;"></iframe>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+    jQuery('iframe#add-or-update-event-plan-popup').on('load', function() {
+      jQuery(this).css("height", "80vh");
+      jQuery(this).css("visibility", "visible")
+    });
+    jQuery('#eventPopup').modal('show');
+    jQuery('#closeEventPopup').on('click', function(){
+      jQuery('#eventPopup').modal('hide');
+      jQuery('#eventPopup').remove();
+    });
+  }
+}
+
+jQuery(window).on("message", function(event) {
+  const eventName = event.originalEvent.data;
+  const language = 'ja';
+  if (IFRAME_EVENTS.includes(eventName)) {
+    jQuery('#eventPopup').modal('hide');
+    alert(MF_AGRI_LANGUAGES[language][eventName]);
+  }
+});

@@ -1,0 +1,187 @@
+(() => {
+  'use strict';
+  const ELEMENT_FIELD_ID = {};
+  const FORM_DATA = cybozu.data.page['FORM_DATA'];
+  const fieldList = FORM_DATA.schema.table.fieldList;
+  const SECTION_TABLE_FIELD_CODE = '詳細';
+  const SECTION_FIELD_CODE = '区画';
+  const FIELD_ID_FIELD_CODE = '圃場ID';
+  const IMAGES_DOCUMENT_LIBRARY_NAME = 'Images';
+  const SHAREPOINT_FIELD_IMAGE_ID = 'ImageIDLookupId';
+  const HARVEST_ATTACHMENT_FIELD_CODE = '写真';
+  
+  // customize update sharepoint list to kintone
+  $(document).ready(function () {
+    async function imageUrlToBase64(url) {
+      const response = await fetch(url);
+      const blob = await response.blob();
+    
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result); // Đây là base64
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+    }
+    function uploadBase64ToKintone(base64, fileName = 'file.txt') {
+      return new Promise((resolve, reject) => {
+        const [meta, data] = base64.split(',');
+        const mime = meta.match(/:(.*?);/)[1];
+        const binary = atob(data);
+        const u8arr = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) u8arr[i] = binary.charCodeAt(i);
+    
+        const blob = new Blob([u8arr], { type: mime });
+        const formData = new FormData();
+        formData.append('__REQUEST_TOKEN__', kintone.getRequestToken());
+        formData.append('file', blob, fileName);
+    
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/k/v1/file.json');
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    
+        xhr.onload = function () {
+          try {
+            const res = JSON.parse(xhr.responseText);
+            if (xhr.status === 200) {
+              resolve(res.fileKey);
+            } else {
+              reject(res);
+            }
+          } catch (e) {
+            reject(e);
+          }
+        };
+    
+        xhr.onerror = function () {
+          reject(new Error('Network error'));
+        };
+    
+        xhr.send(formData);
+      });
+    }
+    MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.middlewareMappingSharePointToKintone = async (itemNeedUpdate, records) => {
+      if (itemNeedUpdate.length == 0) return records;
+      console.log(itemNeedUpdate, records);
+      const docLibMetaData = await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.getDocumentLibraryIDByName(IMAGES_DOCUMENT_LIBRARY_NAME);
+      const docLibId = docLibMetaData.id;
+      for (const item of itemNeedUpdate){
+        if (item.fields[SHAREPOINT_FIELD_IMAGE_ID]){
+          const imageItemData = await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.getSharePointItemByListNameAndItemID(IMAGES_DOCUMENT_LIBRARY_NAME, item.fields[SHAREPOINT_FIELD_IMAGE_ID]);
+          console.log('imageItemData', imageItemData);
+          const fileName = imageItemData.fields.LinkFilename;
+          const imageDetails = await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.getDriveItemByDriveIDAndFileName(docLibId, fileName);
+          console.log('imageDetails', imageDetails);
+          const imageBase64 = await imageUrlToBase64(imageDetails["@microsoft.graph.downloadUrl"]);
+          const fileKey = await uploadBase64ToKintone(imageBase64, fileName);
+          console.log('fileKey', fileKey);
+          const record = records.find(o => o.updateKey.value == item.id);
+          record.record[HARVEST_ATTACHMENT_FIELD_CODE] = {value: [{fileKey: fileKey}]};
+        }
+      }
+      
+      console.log('docLibMetaData', docLibMetaData);
+      
+      return records;
+    }
+  });
+  
+  for (const fieldId of Object.keys(fieldList)){
+    ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+  }
+  for (const subTableId of Object.keys(FORM_DATA.schema.subTable)){
+    ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+    const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+    for (const fieldId of Object.keys(fieldList)){
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+  }
+  /* customize section begin */
+  async function getSectionByFieldID(fieldID) {
+    return new Promise((resolve, reject) => {
+      kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+          app: FIELD_MASTER_APP_ID,
+          id: fieldID
+      }, (resp) => {
+          resolve(resp?.record?.[SECTION_TABLE_FIELD_CODE]?.value);
+      }, (error) => {
+          reject(error);
+      });
+    });
+  }
+  function changeOptionSectionDropDownList (fieldID, initValue = ""){
+    if (!fieldID){
+      $("#sectionID").empty();
+      $("#sectionID").append(`<option value="">-----</option>`);
+      $("#sectionID").val("");
+      $("#sectionID").trigger('change');
+      return;
+    }
+    getSectionByFieldID(fieldID).then((result) => {
+      console.log('result', result);
+      $("#sectionID").empty();
+      $("#sectionID").append(`<option value="">-----</option>`);
+      for (const item of result){
+        const sectionName = item.value['区画名'].value;
+        $("#sectionID").append(`<option value="${sectionName}">${sectionName}</option>`);
+      }
+      $("#sectionID").val(initValue);
+      $("#sectionID").trigger('change');
+    }).catch(e => {
+      console.log(e);
+    })
+  }
+  kintone.events.on([
+    `app.record.create.show`,
+    `app.record.edit.show`,
+    `app.record.detail.show`
+  ], (event) => {
+    kintone.app.record.setFieldShown(FIELD_ID_FIELD_CODE, false);
+    return event;
+  });
+    
+  kintone.events.on([
+    `app.record.create.show`,
+    `app.record.edit.show`
+  ], (event) => {
+    let sectionDropDownList;
+    const record = event.record;  
+    if ($("#sectionID").length == 0){
+      sectionDropDownList = $('<select class="gaia-argoui-select" id="sectionID" style="width: 180px; height: 40px; padding: 0px 10px"></select>');
+      sectionDropDownList.empty();
+      sectionDropDownList.append(`<option value="">-----</option>`);
+      $(`.value-${ELEMENT_FIELD_ID[SECTION_FIELD_CODE]} input`).after(sectionDropDownList);
+    }
+    else {
+      sectionDropDownList = $("#sectionID");
+    }
+    $(`.value-${ELEMENT_FIELD_ID[SECTION_FIELD_CODE]} input`).hide();
+    
+    if (record[FIELD_ID_FIELD_CODE].value){
+      
+      changeOptionSectionDropDownList(record[FIELD_ID_FIELD_CODE].value, record[SECTION_FIELD_CODE].value);
+    }
+    
+    sectionDropDownList.change(function() {
+      setTimeout(() => {
+        const sectionValue = $(this).val();
+        const record = kintone.app.record.get().record;
+        record[SECTION_FIELD_CODE].value = sectionValue;
+        kintone.app.record.set({record: record});
+      }, 1)
+    });
+    return event;
+  });
+  kintone.events.on([
+    `app.record.create.change.${FIELD_ID_FIELD_CODE}`,
+    `app.record.edit.change.${FIELD_ID_FIELD_CODE}`
+  ], (event) => {
+    const record = event.record;
+    console.log('record', record);
+    const fieldID = record[FIELD_ID_FIELD_CODE].value;
+    console.log('fieldID', fieldID);
+    changeOptionSectionDropDownList(fieldID);
+    return event;
+  });
+  /* customize section end */
+})();

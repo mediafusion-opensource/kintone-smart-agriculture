@@ -1,0 +1,2782 @@
+/* 
+  home
+*/
+jQuery.noConflict();
+(async function($) {
+  'use strict';
+  // Dependency Injection
+  const APP_ID = kintone.mobile.app.getId();
+  const USER_LOGIN = kintone.getLoginUser();
+  const isMobile = window.location.href.includes("/k/m");
+  const userMasterService = MF_AGRI_SERVICES.USER_MASTER_SERVICES;
+  const workMasterService = MF_AGRI_SERVICES.WORK_MASTER_SERVICES;
+  const fieldMasterService = MF_AGRI_SERVICES.FIELD_MASTER_SERVICES;  
+  const cropMasterService = MF_AGRI_SERVICES.CROP_MASTER_SERVICES;
+  const workService = MF_AGRI_SERVICES.WORK_SERVICES;
+  const planWorkService = MF_AGRI_SERVICES.PLAN_WORK_SERVICES;
+  const actualWorkService = MF_AGRI_SERVICES.ACTUAL_WORK_SERVICES;
+  const breakTimeService = MF_AGRI_SERVICES.BREAK_TIME_SERVICES;
+  
+  let userMasterData = [];
+  let workMasterData = [];
+  let fieldMasterData = [];
+  let cropMasterData = [];
+  let listUsers = [];
+  let kintoneLoginUser;
+
+  let userPermissions = await userMasterService.getUserPermissions(USER_LOGIN.code);
+  console.log('userPermissions', userPermissions);
+  
+  const language = 'ja';
+  const IFRAME_EVENTS = [
+    'PLAN_REGISTRATION_SUCCESS', 
+    'PLAN_REGISTRATION_FAILURE', 
+    'PLAN_EDIT_SUCCESS', 
+    'PLAN_EDIT_FAILURE', 
+    'PLAN_DELETION_SUCCESS', 
+    'PLAN_DELETION_FAILURE', 
+    'ACTUAL_REGISTRATION_SUCCESS', 
+    'ACTUAL_REGISTRATION_FAILURE', 
+    'ACTUAL_EDIT_SUCCESS', 
+    'ACTUAL_EDIT_FAILURE', 
+    'ACTUAL_DELETION_SUCCESS', 
+    'ACTUAL_DELETION_FAILURE'
+  ];
+  const CREATOR_FIELD_CODE = '作成者';
+  const EMPLOYEE_ID_FIELD_CODE = '社員コード';
+  const USER_SELECTION_FIELD_CODE = 'ユーザーの選択';
+  const EMPLOYEE_NAME_FIELD_CODE = '作業者名';
+  const FULL_NAME_FIELD_CODE = '氏名';
+  const EMAIL_FIELD_CODE = 'メールアドレス';
+  const ACTUAL_EMAIL_FIELD_CODE = '実際_メールアドレス';
+  const PLAN_START_DATE_TIME_FIELD_CODE = '計画_開始時刻';
+  const PLAN_END_DATE_TIME_FIELD_CODE = '計画_終了時刻';
+  const WORK_ID_FIELD_CODE = '作業コード';
+  const WORK_NAME_FIELD_CODE = '作業名';
+  const CROPPING_FIELD_CODE = '作付';
+  const FIELD_FIELD_CODE = '圃場';
+  const FIELD_ID_FIELD_CODE = '圃場ID';
+  const FIELD_NAME_FIELD_CODE = '圃場名';
+  const SECTION_NAME_FIELD_CODE = '区画名';
+  const SECTION_FIELD_CODE = '区画';
+  const DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE = '列詳細';
+  const COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE = '列名';
+  const TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE = '列作業時間';
+  const COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE = '列_実績';
+  const TOTAL_COLUMNS_FIELD_CODE = '列数'; 
+  const ACTUAL_COLUMN_FIELD_CODE = '区画_実績'; 
+  
+  const DETAIL_SECTION_FIELD_CODE = '詳細';
+  const LIST_COLUMN_OF_SECTION_FIELD_CODE = '列名一覧';
+  
+  const SECTION_OR_COLUMN_FIELD_CODE = '集計単位';
+  const SECTION_OPTION_VALUE = '区画';
+  const COLUMN_OPTION_VALUE = '列';
+  
+  const PLAN_DATE_FIELD_CODE = '予定日';
+  const WORK_MASTER_ID_FIELD_CODE = '作業コード';
+  const WORK_MASTER_NAME_FIELD_CODE = '作業名';
+  const REMASK_FIELD_CODE = '備考';
+  const PERFORMANCE_UNIT_FIELD_CODE = '実績単位';
+  const CROP_FIELD_CODE = '作付';
+  const VARIETY_FIELD_CODE = '品種';
+  
+  
+  const WORK_STATUS = '作業ステータス';
+  const WORK_STATUS_NOT_START = '未対応';
+  const WORK_STATUS_PROCESSING = '処理中';
+  const WORK_STATUS_COMPLETED = '完了';
+  const WORK_STATUS_ABNORMAL = '異常';
+
+  const ACTUAL_DATE_FIELD_CODE = '作業日';
+  const ACTUAL_START_DATE_TIME_FIELD_CODE = '実績_開始時刻';
+  const ACTUAL_END_DATE_TIME_FIELD_CODE = '実績_終了時刻';
+  const BREAK_TIME_ID_FIELD_CODE = '休憩ID';
+  const BREAK_TIME_NAME_FIELD_CODE = '休憩名';
+  const BREAK_TIME_TABLE_FIELD_CODE = '休憩履歴';
+  const BREAK_TIME_FIELD_CODE = '休憩時間';
+  const TOTAL_BREAK_TIME_FIELD_CODE = '休憩時間合計';
+  const TIME_SPENT_FIELD_CODE = '作業時間';
+  const NUMBER_OF_ACHIEVEMENTS_FIELD_CODE = '実績数';
+  const TARGET_NOTI_FIELD_CODE = '対象通知';
+  const NOTI_CONTENT_FIELD_CODE = '通知内容';
+  
+  const START_MUST_LESS_THEN_END = '開始日は終了日より前です。';
+  const REQUIRED = '必須';
+  const CHOICE = '選択';
+  const SEARCH_THREE_DOT = '検索。。。';
+  const NO_RESULTS_FOUND = '結果が見つかりません';
+  const DETELE = '削除';
+  
+  const BG_COLOR_EVENT_NOT_ASSIGN = '#fff';
+  const BG_COLOR_EVENT_NOT_START = '#e8697d';
+  const BG_COLOR_EVENT_PROCESSING = '#5589c0';
+  const BG_COLOR_EVENT_COMPLETED = '#8ee6c2';
+  const BG_COLOR_EVENT_ABNORMAL = '#fdbc64';
+  const COLOR_WORK_STATUS_INIT = '#ccc';
+  const BG_COLOR_WARNING = '#ffc000';
+  const BG_COLOR_STOP_BREAK_TIME = '#28a745';
+  const BG_BUTTON_OK = '#e8697d';
+  const BG_BUTTON_STOP_EVENT = '#e8697d';
+  
+  const FILTER_TODAY = '本日';
+  const FILTER_TOMORROW = '明日';
+  const FILTER_YESTERDAY = '昨日';
+  const FILTER_AFTER_7_DAYS = '7日後';
+  const FILTER_BEFORE_7_DAYS = '7日前';
+  const FILTER_BEFORE_30_DAYS = '30日前';
+  const FILTER_CUSTOM_DATE = 'カスタム';
+
+  const ALERT_WORK_ABNORMAL = '実績のデータが不十分です。修正してください。';
+  const ALERT_CANNOT_DO_MULTIPLE_JOBS = '処理中の作業があるため、この作業を開始できません。';
+  const START_DATE_MUST_LESS_THAN_END_DATE = '開始日 <= 終了日';
+  const TOTAL_BREAK_TIME_MUST_BE_LESS_THAN_WORKING_TIME = '休憩時間は労働時間より短くなければなりません';
+  const BREAK_TIME_HEADER = '休憩ブロックを選択してください';
+  const EDIT_EVENT_MODAL_HEADER = '実績のデータを修正';
+  const PERFORMANCE_MODAL_HEADER = '実績数を入力してください';
+  const NO_RESULTS_EVENT_FOUND = 'データが見つかりません';
+  const MUST_SELECT_AT_LAEST_ONE = '少なくとも 1 つ種類のステータスを選択する必要があります';
+  const CONFIRM_STOP_EVENT = '作業を終了しますか？';
+  const MUST_SELECT_AT_LAEST_ONE_OPTION = '1つの値を選択してください';
+  const REQUIRED_ERROR_MESSAGE = '必須項目です';
+  
+  const OPTION_ADD_EVENT_REGISTER_COMPLETED = '完了済み作業を登録';
+  const OPTION_ADD_EVENT_START_NEW = '新規作業を開始';
+
+  
+  const LOCALSTORAGE_CACHE_WORK_START_TIME = 'CACHE_WORK_START_TIME';
+  const LOCALSTORAGE_CACHE_BREAK_TIME = 'CACHE_BREAK_TIME';
+  
+  // disabled kintone mobile guide
+  localStorage.setItem('gaia.10::com.cybozu.kintone.mobile.LocalSetting', 
+  JSON.stringify({
+    "v2NavigationPanelButtonTooltipDisplayed":true,
+    "v2WelcomeDialogDisplayed":true
+  }))
+  localStorage.setItem('gaia.21::com.cybozu.kintone.mobile.LocalSetting', 
+  JSON.stringify({
+    "v2NavigationPanelButtonTooltipDisplayed":true,
+    "v2WelcomeDialogDisplayed":true
+  }))
+  
+  $( document ).ready(function() {
+   $("header").css('background-color', '#4b4b4b');
+  });
+  
+  const url = window.location.href;
+  if (url.includes('/show?record=')){
+    $('#main').hide();
+    const objUrl = new URL(window.location.href);
+    const recordId = objUrl.searchParams.get("record");
+    localStorage.setItem('noti_record_id', recordId);
+    window.location.href = window.location.origin + "/k/m/" + APP_ID;
+  }
+  
+  function sleep(seconds) {
+    return new Promise(resolve => setTimeout(resolve, seconds * 1000));
+  }
+  
+  function updateClock() {
+    const now = moment();  // moment object của thời gian hiện tại
+    const days = ['日', '月', '火', '水', '木', '金', '土'];
+  
+    const y = now.year();
+    const m = now.format('MM');
+    const d = now.format('DD');
+    const day = days[now.day()];
+  
+    const hh = now.format('HH');
+    const mm = now.format('mm');
+    const ss = now.format('ss');
+  
+    $('#clock_yearMonthDate').text(`${y}年${m}月${d}日 (${day})`);
+    $('#clock_hourMinuteSecond').html(`${hh}:${mm} <span id="sec" style="font-size:0.55em;">${ss}</span> `);
+  }
+  
+  // function getElapsedTimeFormatted(startTime, pauseIntervals = [], currentTime = new Date()) {
+  //   const start = new Date(startTime);
+  //   const now = new Date(currentTime);
+  
+  //   let elapsed = now - start;
+  
+  //   for (const durationStr of pauseIntervals) {
+  //     const [hh, mm, ss] = durationStr.split(':').map(Number);
+  //     const durationMs = ((hh * 3600) + (mm * 60) + (ss || 0)) * 1000;
+  //     elapsed -= durationMs;
+  //   }
+  
+  //   const totalSeconds = Math.floor(elapsed / 1000);
+  //   const hours = Math.floor(totalSeconds / 3600).toString().padStart(2, '0');
+  //   const minutes = Math.floor((totalSeconds % 3600) / 60).toString().padStart(2, '0');
+  //   const seconds = (totalSeconds % 60).toString().padStart(2, '0');
+  
+  //   return `${hours}:${minutes}:${seconds}`;
+  // }
+  function getElapsedTimeFormatted(startTime, pauseIntervals = [], currentTime = moment()) {
+    const start = moment(startTime);
+    const now = moment(currentTime);
+    
+    let elapsed = moment.duration(now.diff(start));
+  
+    for (const durationStr of pauseIntervals) {
+      const [hh, mm, ss] = durationStr.split(':').map(Number);
+      const pauseDuration = moment.duration({
+        hours: hh || 0,
+        minutes: mm || 0,
+        seconds: ss || 0
+      });
+  
+      elapsed.subtract(pauseDuration);
+    }
+  
+    const hours = String(Math.floor(elapsed.asHours())).padStart(2, '0');
+    const minutes = String(elapsed.minutes()).padStart(2, '0');
+    const seconds = String(elapsed.seconds()).padStart(2, '0');
+  
+    return `${hours}:${minutes}:${seconds}`;
+  }
+
+
+  
+  $(document).ready(function() {
+    updateClock();
+    setInterval(updateClock, 1000);
+  });
+  
+  kintone.events.on(['mobile.app.record.index.show'], async function(event) {
+    try {
+      $("main, footer").hide();
+      $("main").after(`<div style="font-size: 1.6rem;" class="mt-3" id="mf-container"></div>`);
+        const loadingModal = $(`<div class="custom-modal" style="background-color: rgba(0, 0, 0, 0.01);">
+        <div class="custom-modal-content" style="background-color: initial">
+            <i class="fa fa-spinner fa-spin" style="font-size: 48px; color: #92cbf7"></i>
+        </div>
+      </div>`);
+      // change search icon to filter icon
+      $('.gaia-mobile-v2-viewpanel-globalnavigationbar-right-secondary-action').empty();
+
+      $('.gaia-mobile-v2-viewpanel-header').append(
+        `
+        <div style="background-color:#edf5ed; padding:10px 20px; border-radius:12px; text-align:center; margin: 0px 10px 10px 10px;">
+          <div style="font-weight:bold; font-size:1.2em;" id="clock_yearMonthDate"></div>
+          <div style="font-size:2em; font-weight:bold;" id="clock_hourMinuteSecond"></div>
+        </div>
+        `
+      );
+      
+      $('.gaia-mobile-v2-viewpanel-globalnavigationbar-right-secondary-action').append(
+        `<button id="filter-event" data-toggle="collapse" data-target="#filter-container" 
+        style="margin-top: 10px; width: 45px; background: transparent; border: none; outline: none;">
+          <i class="fa fa-filter" type="button" aria-hidden="true" 
+          style="font-size: 2.2rem; color: #fff;"></i>
+        </button>
+        `
+      )
+
+      $('body').append(loadingModal);
+      const btnAddNewEvent = $(`
+        <button id="addNewEvent" style="
+          position: fixed;
+          bottom: 120px;
+          right: 50px;
+          width: 70px;
+          height: 70px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #007bff, #0056b3);
+          color: white;
+          border: none;
+          font-size: 13px;
+          font-weight: bold;
+          line-height: 1.2;
+          text-align: center;
+          box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+          cursor: pointer;
+          z-index: 1000;
+          transition: all 0.2s ease-in-out;
+        ">
+          新規<br>登録
+        </button>`)
+        
+      const btnReturnHome = $(`
+        <button style="
+          position: fixed;
+          bottom: 80px;
+          right: 50px;
+          width: 70px;
+          height: 70px;
+          border-radius: 50%;
+          background: linear-gradient(to bottom, #dc3545, #a82833);
+          color: white;
+          border: none;
+          font-size: 13px;
+          font-weight: bold;
+          line-height: 1.2;
+          text-align: center;
+          box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+          cursor: pointer;
+          z-index: 1000;
+          transition: all 0.2s ease-in-out;
+        ">
+          <i class="fa fa-home" style="font-size: 30px"></i> <br/> 閉じる
+        </button>`)
+        
+      $("body").append(btnAddNewEvent, btnReturnHome);
+      btnReturnHome.hide();
+      
+      $("#mf-container").append(`
+          <div id="list-event">
+            <div class="m-3 p-3 collapse" id="filter-container" style="border: 1px solid #ccc">
+              <div class="d-flex flex-row">
+                <div class="mr-2 input-with-label-container">
+                  <select id="agoFilter" class="form-control form-control-lg" style="height: 40px; font-size: 1.2rem; background-color: white; width: 120px">
+                    <option value="${FILTER_TODAY}" selected>${FILTER_TODAY}</option>
+                    <option value="${FILTER_TOMORROW}">${FILTER_TOMORROW}</option>
+                    <option value="${FILTER_YESTERDAY}">${FILTER_YESTERDAY}</option>
+                    <option value="${FILTER_AFTER_7_DAYS}">${FILTER_AFTER_7_DAYS}</option>
+                    <option value="${FILTER_BEFORE_7_DAYS}">${FILTER_BEFORE_7_DAYS}</option>
+                    <option value="${FILTER_BEFORE_30_DAYS}">${FILTER_BEFORE_30_DAYS}</option>
+                    <option value="${FILTER_CUSTOM_DATE}">${FILTER_CUSTOM_DATE}</option>
+                  </select>
+                  
+
+                  
+                </div>
+                <div class="d-flex flex-row justify-content-between w-100">
+                  <div class="input-with-label-container w-50" id="startDateFilterContainer">
+                    <label for="startDateFilter" class="form-label label-for-input required" style="font-size: 1.2rem">開始日</label>
+                    <input class="form-control form-control-lg" id="startDateFilter" placeholder="YYYY-MM-DD" aria-label="StartDate" style="height: 40px; font-size: 1.2rem; background-color: white;" readonly>
+                    <small class="startDateFilter-error" style="color: red"></small>
+                  </div>
+                  <div class="ml-2 input-with-label-container w-50" id="endDateFilterContainer">
+                    <label for="endDateFilter" class="form-label label-for-input required">終了日</label>
+                    <input class="form-control form-control-lg" id="endDateFilter" placeholder="YYYY-MM-DD" aria-label="EndDate" style="height: 40px; font-size: 1.2rem; background-color: white;" readonly>
+                    <small class="endDateFilter-error" style="color: red"></small>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="d-flex flex-row mt-2">
+                <div class="d-flex flex-column mr-2">
+                  <div style="font-size:1.4rem; width: 120px" class="mt-1">
+                    <input type="radio" name="searchMode" value="全体" checked> 全体
+                    <input type="radio" name="searchMode" value="実績"> 実績
+                  </div>
+                  <div class="d-flex mt-3">
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="allUsersToggle">
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span style="font-size: 1.4rem; margin-left: 5px">allUsers</span>
+                  </div>  
+                </div>
+                <div class="mt-2 w-100">
+                  <select id="selectUsers" multiple></select>
+                </div>
+              </div>
+              
+              <div>
+                <div class="d-flex control-filter-work-status justify-content-center mt-5">
+                  <div class="form-check mr-5">
+                    <input class="form-check-input" type="checkbox" id="workStatusNotStart" checked style="accent-color: #e8697d; width: 17px; height: 17px;">
+                    <label class="form-check-label ml-3" for="workStatusNotStart">
+                      未対応
+                    </label>
+                  </div>
+                  <div class="form-check mr-5">
+                    <input class="form-check-input" type="checkbox" id="workStatusProcessing" checked style="accent-color: #5589c0; width: 17px; height: 17px;">
+                    <label class="form-check-label ml-3" for="workStatusProcessing">
+                      処理中
+                    </label>
+                  </div>
+                  <div class="form-check mr-5">
+                    <input class="form-check-input" type="checkbox" id="workStatusAbnormal" checked style="accent-color: #fdbc64; width: 17px; height: 17px;">
+                    <label class="form-check-label ml-3" for="workStatusAbnormal">
+                      異常
+                    </label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="workStatusCompleted" checked style="accent-color: #8ee6c2; width: 17px; height: 17px;">
+                    <label class="form-check-label ml-3" for="workStatusCompleted">
+                      完了
+                    </label>
+                  </div>
+                </div>
+                <small class="control-filter-work-status-error" style="color: red"></small>
+              </div>
+              <div class="text-center">
+                <button class="btn btn-lg btn-success mr-5" id="search" type="button" style="height: 40px; font-size: 1.2rem; margin-top: 27px">フィルター</button>
+                <button class="btn btn-lg btn-outline-secondary" id="clearSearch" type="button" style="height: 40px; font-size: 1.2rem; margin-top: 27px">リセット</button>
+              </div>
+            </div>
+            <div class="mb-3 text-center" style="background: #d8fce4;border-radius: 15px; margin: 0px 10px 10px 10px; padding-top: 10px;">
+              <div id="dateFilterContent" class="text-center font-weight-bold mb-2"></div>
+                <div class="d-flex flex-row justify-content-between" style="margin: 0 80px;">
+                  <div>
+                    <div id="work-result-content" class="work-result-content mb-2">0/0</div>
+                    <label>作業数</label>
+                  </div>
+                  <div>
+                    <div id="time-spent-result-content" class="work-result-content mb-2">0.0</div>
+                    <label>集合時間</label>
+                  </div>
+                </div>
+                <button id="searchAllExceptCompleted" class="font-weight-bold p-4" style="font-size: 1.6rem; color: #ff0000; background: none; border: none; cursor: pointer; text-decoration: underline;">
+                    全体の残る作業
+                </button>
+            </div>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div class="font-weight-bold p-4"><i class="fa fa-check-circle mr-2" style="color:green;font-size: 20px;"></i>作業一覧</div>
+                
+          </div>
+            <div class="list-group p-4" id="list-event-item"></div>
+            <div id="list-event-item-error" class="text-center" style="color: #ccc"></div>
+            
+          </div>
+          <div id="detail-event" style="display: none">
+            <div class="d-flex flex-column pl-4 pr-4 pt-2">
+              <div class="mb-3">
+                <span id="detail-event-back" style="color: #7fb3e4" type="button">作業一覧</span>
+                <span>＞</span>
+                <span>作業詳細</span>
+              </div>
+              <div id="detail-event-container"></div>
+            </div>
+          </div>
+      `);
+      
+      function modalConfirm(textContent, callback) {
+        const confirmModal = $(`<div class="custom-modal"></div>`);
+        const modalContent = $(`<div class="custom-modal-content"></div>`)
+        confirmModal.append(modalContent);
+        $('body').append(confirmModal);
+        const contentElement = $(`<div class="mb-3"><b>${textContent}</b></div>`)
+        const footerDiv = $(`<div></div>`);
+        const btnCancel = $(`<button class="btn-control-work">キャンセル</button>`);
+        const btnOK = $(`<button class="btn-control-work ml-3" style="background-color: ${BG_BUTTON_OK}">確定</button>`);
+        footerDiv.append(btnCancel, btnOK);
+        modalContent.append(contentElement, footerDiv);
+        btnOK.on('click', function(){
+          confirmModal.remove();
+          callback(true);
+        })
+        btnCancel.on('click', function(){
+          confirmModal.remove();
+          callback(false);
+        })
+      }
+      function modalAddEvent(callback){
+        const confirmModal = $(`<div class="custom-modal"></div>`);
+        const modalContent = $(`<div class="custom-modal-content"></div>`)
+        confirmModal.append(modalContent);
+        $('body').append(confirmModal);
+        const contentElement = $(`<div class="mb-3">
+          <p><strong>登録オプションを選択してください</strong></p>
+          <div style="text-align: left; margin: 0 auto; width: 250px;">
+            <label>
+              <input type="radio" name="taskEndOption" value="${OPTION_ADD_EVENT_START_NEW}" checked>
+              ${OPTION_ADD_EVENT_START_NEW}
+            </label><br>
+          
+            <label>
+              <input type="radio" name="taskEndOption" value="${OPTION_ADD_EVENT_REGISTER_COMPLETED}">
+              ${OPTION_ADD_EVENT_REGISTER_COMPLETED}
+            </label>
+          </div>
+        </div>`)
+        const footerDiv = $(`<div></div>`);
+        const btnCancel = $(`<button class="btn-control-work">キャンセル</button>`);
+        const btnOK = $(`<button class="btn-control-work ml-3" style="background-color: ${BG_BUTTON_OK}">確定</button>`);
+        footerDiv.append(btnCancel, btnOK);
+        modalContent.append(contentElement, footerDiv);
+        btnOK.on('click', function(){
+          const today = moment();
+          searchPlanWork({userSearch: kintoneLoginUser['社員コード'].value, startDate: today, endDate: today, workStatus: [WORK_STATUS_PROCESSING]}).then((events) => {
+            const option = $('input[name="taskEndOption"]:checked').val();
+            if (events && events.length > 0 && option == OPTION_ADD_EVENT_START_NEW) {
+              alert(ALERT_CANNOT_DO_MULTIPLE_JOBS);
+              return;
+            }
+            callback(option); 
+            confirmModal.remove();
+          })
+        })
+        btnCancel.on('click', function(){
+          callback(false);
+          confirmModal.remove();
+        })
+      }
+      function showModalAddAndEditEvent(option = OPTION_ADD_EVENT_REGISTER_COMPLETED, event = undefined, mode = "ADD", editPermission = "FULLEDIT"){
+        let listFields = [];
+        let listSections = [];
+        let listCrops = [];
+        let listBreakTime = [];
+        let listColumns = [];
+        const modalAddNewEvent = $(`
+          <div class="modal fade" id="jobModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content" style="font-size:14px">
+                <div class="modal-title text-center m-3 font-weight-bold">${mode == "ADD" ? "新しい作業を登録": "実績データを修正"}</div>
+                <div class="modal-body" style="padding: 0px;">
+                  <div style="height: 500px; overflow-y: auto; overflow-x: hidden; padding: 0px 20px;">       
+                    <!-- 作業名 -->
+                    <div class="form-group">
+                      <label>作業名 <span class="text-danger">*</span></label>
+                      <select style="font-size: 14px" id= "addNewEvent_Work" class="form-control" ${mode == "EDIT" && editPermission != "FULLEDIT" ? "disabled" : ""}>
+                      </select>
+                      <span class="add-new-event-work-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                    </div>
+                    
+                    <!-- 圃場 -->
+                    <div class="form-group">
+                      <label>圃場 <span class="text-danger">*</span></label>
+                      <select style="font-size: 14px" id="addNewEvent_Field" class="form-control" ${mode == "EDIT" && editPermission != "FULLEDIT" ? "disabled" : ""}>
+                      </select>
+                      <span class="add-new-event-field-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                    </div>
+                    
+                    <div id="addNewEvent_Toggle" class="form-group d-flex flex-row">
+                      <div class="toggle-button mt-2">
+                        <input type="radio" id="addNewEvent_toggleSection" name="toggle" checked>
+                        <label for="addNewEvent_toggleSection">区画</label>
+                      
+                        <input type="radio" id="addNewEvent_toggleColumn" name="toggle">
+                        <label for="addNewEvent_toggleColumn">列</label>
+                      </div>
+                      <div style="font-size: 14px; margin-top: 13px; margin-left: 5px;">作業の集計単位を選択してください</div>
+                    </div>
+                    
+                    <!-- 区画 -->
+                    <div class="form-group">
+                      <label>区画 <span class="text-danger">*</span></label>
+                      <select style="font-size: 14px" id="addNewEvent_Section" class="form-control" ${mode == "EDIT" && editPermission != "FULLEDIT" ? "disabled" : ""}>
+                      </select>
+                      <span class="add-new-event-section-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                    </div>
+                    
+                    ${
+                      option == OPTION_ADD_EVENT_START_NEW
+                      ?
+                      `
+                        <!-- 列 -->
+                        <div class="form-group add-new-event-column">
+                          <label>列 <span class="text-danger">*</span></label>
+                          <select style="font-size: 1em" id="selectColumn" class="form-control" multiple>
+                          </select>
+                          <span class="add-new-event-column-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                        </div>
+                      `
+                      :
+                      `
+                        <!-- 列 -->
+                        <div class="form-group add-new-event-column">
+                          <label>列 <span class="text-danger">*</span></label>
+                          <div class="d-flex flex-row">
+                            <div id="listColumns" class="mr-2 p-2" style="width: 100%; border: 1px solid #ccc; max-height: 200px; overflow: auto;"></div>
+                            <button id="addColumn" class="btn btn-outline-secondary" type="button" style="height: 30px; width: 30px; border-radius: 25px; background: #3860b2; color: #ffffff; font-size: 14px; font-weight: bold;">＋</button>
+                          </div>
+                          <span class="add-new-event-column-error" style="color: red; font-size: 13px; display: none;">1つ以上の列を選択してください</span>
+                        </div>
+                      `
+                    }
+                    
+                    ${
+                      option == OPTION_ADD_EVENT_REGISTER_COMPLETED
+                      ?
+                      `
+                      <!-- 実績（列数） -->
+                      <div class="form-group">
+                        <label>実績（列数） <span class="text-danger">*</span></label>
+                        <input style="font-size: 14px" id="addNewEvent_ActualColumn" class="form-control" type="number">
+                        <span class="add-new-event-actual-column-error" style="color: red; font-size: 13px; display: none;">${REQUIRED_ERROR_MESSAGE}</span>
+                      </div>
+                      `
+                      :
+                      ``
+                    }
+                    
+          
+                    <!-- 作付 -->
+                    <div class="form-group">
+                      <label>作付</label>
+                      <select style="font-size: 14px" id="addNewEvent_Crop" class="form-control" ${mode == "EDIT" && editPermission != "FULLEDIT" ? "disabled" : ""}>
+                      </select>
+                    </div>
+                    
+                    
+          
+                    <!-- 品種 -->
+                    <div class="form-group">
+                      <label>品種</label>
+                      <input style="font-size: 14px" id= "addNewEvent_CropVariety" type="text" class="form-control" ${mode == "EDIT" && editPermission != "FULLEDIT" ? "disabled" : ""}>
+                    </div>
+
+                    ${
+                      option == OPTION_ADD_EVENT_REGISTER_COMPLETED
+                      ?
+                      `
+                        <!-- 作業日 -->
+                        <div class="form-group">
+                          <label>作業日 <span class="text-danger">*</span></label>
+                          <input style="font-size: 14px" id="addNewEvent_Date" type="date" class="form-control" required>
+                          <span class="add-new-event-date-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                        </div>
+              
+                        <!-- 開始 / 終了 -->
+                        <div class="form-row">
+                          <div class="form-group col">
+                            <label>開始 <span class="text-danger">*</span></label>
+                            <input style="font-size: 14px" id="addNewEvent_StartTime" type="time" class="form-control" value="00:00">
+                            <span class="add-new-event-starttime-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                          </div>
+                          <div class="form-group col">
+                            <label>終了 <span class="text-danger">*</span></label>
+                            <input style="font-size: 14px" id="addNewEvent_EndTime" type="time" class="form-control" value="00:00">
+                            <span class="add-new-event-endtime-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                          </div>
+                        </div>
+                        <!-- 休暇 -->
+                        <div class="form-group">
+                          <label>休暇</label>
+                          <div class="d-flex flex-row">
+                            <div id="listBreakTime" class="mr-2 p-2" style="width: 100%; border: 1px solid #ccc; max-height: 200px; overflow: auto;"></div>
+                            <button id="addBreakTime" class="btn btn-outline-secondary" type="button" style="height: 30px; width: 30px; border-radius: 25px; background: #3860b2; color: #ffffff; font-size: 14px; font-weight: bold;">＋</button>
+                          </div>
+                        </div>
+                      `
+                      :
+                      ``
+                    }
+                  </div>
+                  <!-- Button OK / キャンセル -->
+                  <div class="text-center m-4">
+                    <button id="addNewEvent_Cancel" class="btn btn-warning" style="width: 120px; font-weight: bold; padding:8px 16px;border:2px solid #333;background:white;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">キャンセル</button>
+                    <button id="addNewEvent_OK" class="btn btn-primary ml-2" style="width: 120px; font-weight: bold; padding:8px 16px;border:2px solid #333;background:#e65c70;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">確定</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        `);
+        function renderListColumn () {
+          $('#listColumns').empty();
+          for (const [index, item] of listColumns.entries()){
+            const divContainer = $('<div class="d-flex flex-row mb-3"></div>');
+            const divValue = $(`<div class="d-flex flex-row" style="min-width: 160px;">  
+              <div>${item[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]} - ${item[TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE]} - ${item[COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE] || 0}%</div>
+            </div>`);
+            const removeBtn = $('<i class="fa fa-trash" style="font-size: 16px; color: #3860b2;"></i>');
+            divContainer.append(divValue, removeBtn);
+            
+            removeBtn.on('click', function(){
+              listColumns.splice(index, 1);
+              divContainer.remove();
+            })
+            
+            $('#listColumns').append(divContainer);
+            
+          }
+        }
+        
+        function renderListBreakTime () {
+          $('#listBreakTime').empty();
+          for (const [index, item] of listBreakTime.entries()){
+            const divContainer = $('<div class="d-flex flex-row mb-3"></div>');
+            const divValue = $(`<div class="d-flex flex-column mr-2" style="min-width: 100px;">  
+              <div>${item['休憩名']} - ${item['休憩時間']}</div>
+            </div>`);
+            const removeBtn = $('<i class="fa fa-trash" style="font-size: 16px; color: #3860b2;"></i>');
+            divContainer.append(divValue, removeBtn);
+            
+            removeBtn.on('click', function(){
+              listBreakTime.splice(index, 1);
+              divContainer.remove();
+            })
+            
+            $('#listBreakTime').append(divContainer);
+            
+          }
+        }
+        
+        modalAddNewEvent.modal("show");
+        $('body').append(modalAddNewEvent);
+        
+        $('#addNewEvent_Date').val(moment().format('YYYY-MM-DD'));
+        
+        fieldMasterService.getListFields().then(result => {
+          listFields = result;
+          console.log('listFields', listFields);
+          $('#addNewEvent_Field').empty();
+          $('#addNewEvent_Field').append(`<option value=""></option>`)
+          
+          for (const item of listFields){
+            $('#addNewEvent_Field').append(`<option value="${item['SharePointID'].value}">${item[FIELD_NAME_FIELD_CODE].value}</option>`)
+          }
+          if (mode == "EDIT"){
+            $('#addNewEvent_Field').val(event['圃場_SharePointID'].value);
+          }
+          $('#addNewEvent_Field').trigger('change');
+        });
+        
+        cropMasterService.getListCrops().then(result => {
+          listCrops = result;
+          $('#addNewEvent_Crop').empty();
+          $('#addNewEvent_Crop').append(`<option value=""></option>`)
+          for (const item of listCrops){
+            $('#addNewEvent_Crop').append(`<option value="${item['SharePointID'].value}">${item['作付名'].value}</option>`)
+          }
+          if (mode == "EDIT"){
+            $('#addNewEvent_Crop').val(event['作付_SharePointID'].value);
+          }
+          $('#addNewEvent_Crop').trigger('change');
+        });
+        
+        workMasterService.getListWorks().then(result => {
+          $('#addNewEvent_Work').empty();
+          $('#addNewEvent_Work').append(`<option value=""></option>`)
+          for (const item of result){
+            $('#addNewEvent_Work').append(`<option value="${item['SharePointID'].value}">${item['作業名'].value}</option>`)
+          }
+          if (mode == "EDIT"){
+            $('#addNewEvent_Work').val(event['作業_SharePointID'].value);
+          }
+          $('#addNewEvent_Work').trigger('change');
+        })
+        
+        $('#addNewEvent_Field').on('change', function(){
+          const fieldValue = $(this).val();
+          const selectedField = listFields.find(o => o['SharePointID'].value == fieldValue);
+          console.log('selectedField', selectedField);
+          if (!selectedField) return;
+          listSections = selectedField['詳細'].value;
+          $('#addNewEvent_Section').empty();
+          $('#addNewEvent_Section').append(`<option value=""></option>`)
+          for (const item of listSections){
+            $('#addNewEvent_Section').append(`<option value="${item.value['区画名'].value}">${item.value['区画名'].value}</option>`)
+          } 
+          if (mode == "EDIT"){
+            $('#addNewEvent_Section').val(event['区画'].value);
+          }
+          $('#addNewEvent_Section').trigger('change');
+        });
+        
+        $('#addNewEvent_Crop').on('change', function(){
+          const cropValue = $(this).val();
+          const selectedCrop = listCrops.find(o => o['SharePointID'].value == cropValue);
+          if (!selectedCrop) return;
+          console.log('selectedCrop', selectedCrop);
+          $('#addNewEvent_CropVariety').val(selectedCrop?.['品種']?.value)
+        })
+        
+        $("#addBreakTime").on("click", function(){
+          showModalAddBreakTime((data) => {
+            listBreakTime.push(data);
+            renderListBreakTime(listBreakTime);
+          });
+        });
+        
+        $("#addColumn").on("click", function(){
+          const sectionValue = $('#addNewEvent_Section').val();
+          if (!sectionValue) return;
+          const selectedSection = listSections.find(o => o.value['区画名'].value == sectionValue);
+          console.log('selectedSection', selectedSection);
+          const columns = selectedSection.value[LIST_COLUMN_OF_SECTION_FIELD_CODE].value.split(';');
+          
+          showModalAddColumn(columns, (data) => {
+            listColumns.push(data);
+            renderListColumn(listColumns);
+            $('#addNewEvent_ActualColumn').val(listColumns.length);
+          });
+        });
+        let choices;
+        let totalColumns = 0;
+        if ($('#selectColumn').length > 0){
+          choices = new Choices('#selectColumn', {
+            removeItemButton: true,
+            placeholder: true,
+            searchEnabled: false,
+            shouldSort: false,
+            position: 'bottom',
+            duplicateItemsAllowed: false,
+            renderSelectedChoices: 'always'
+          });
+      
+          $('.choices').on('click', () => {
+            choices.showDropdown();
+          });
+          
+          
+          $('#addNewEvent_Section').on('change', function(){
+            const sectionValue = $(this).val();
+            if (!sectionValue) {
+              choices.clearStore(); 
+              choices.setChoices([], 'value', 'label', true); 
+              return;
+            }
+            const selectedSection = listSections.find(o => o.value['区画名'].value == sectionValue);
+            
+            console.log('selectedSection', selectedSection);
+            $('#selectColumn').empty();
+            const listColumns = selectedSection.value[LIST_COLUMN_OF_SECTION_FIELD_CODE].value.split(';');
+            totalColumns = listColumns.length;
+            for (const item of listColumns){
+              $('#selectColumn').append(`<option value="${item}">${item}</option>`)
+            } 
+            
+            const newOptions = listColumns.map(o => {
+              return { value: o, label: o, selected: false };
+            });
+            
+            choices.clearStore(); 
+            choices.setChoices(newOptions, 'value', 'label', true); 
+            
+          });
+        }
+        
+        else {
+          $('#modalSelectSectionOrColumn_OKBtn').on('click', function(){
+            modal.modal("hide");
+            callback({
+              sectionName: $('#selectSection option:checked').text(),
+              listColumns: [],
+              workOn: workOn
+            });
+          })
+        }
+        $('.add-new-event-column').hide();
+        
+        $('#addNewEvent_Section').on('change', function(){
+          const sectionValue = $(this).val();
+          const selectedSection = listSections.find(o => o.value['区画名'].value == sectionValue);
+          console.log('selectedSection', selectedSection);
+          if (!selectedSection) return;
+          const listColumns = selectedSection.value[LIST_COLUMN_OF_SECTION_FIELD_CODE].value.split(';');
+          totalColumns = listColumns.length;
+          if (mode == "EDIT"){
+            $('#addNewEvent_ActualColumn').val(event[ACTUAL_COLUMN_FIELD_CODE].value);
+          }
+          // else {
+          //   $('#addNewEvent_ActualColumn').val(listColumns.length);
+          // }
+        });
+        
+        $('#addNewEvent_ActualColumn').on('input', function(){
+          let value = +$(this).val();
+          if (value < 0) {
+            value = 0;
+          }
+          else if (value > totalColumns){
+            value = totalColumns
+          }
+          $(this).val(value);
+        });
+        
+        $('#addNewEvent_Toggle').on('change', function(){
+          const selectedId = $('#addNewEvent_Toggle input[name="toggle"]:checked').attr('id');
+          if (selectedId == "addNewEvent_toggleColumn"){
+            $('.add-new-event-column').show();
+            $('#addNewEvent_ActualColumn').prop('disabled', true);
+          }
+          else {
+            $('.add-new-event-column').hide();
+            $('#addNewEvent_ActualColumn').prop('disabled', false);
+          }
+          listColumns = [];
+          choices?.removeActiveItems(); 
+          renderListColumn(listColumns)
+        })
+        
+        if (mode == "EDIT"){
+          if (event[SECTION_OR_COLUMN_FIELD_CODE].value == SECTION_OPTION_VALUE){
+            $('#addNewEvent_toggleSection').prop('checked', true).trigger('change');
+            $('#addNewEvent_toggleColumn').prop('checked', false);
+          }
+          else {
+            $('#addNewEvent_toggleSection').prop('checked', false);
+            $('#addNewEvent_toggleColumn').prop('checked', true).trigger('change');
+          }
+          listColumns = event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value
+          .filter(o => o.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]?.value) 
+          .map(o => {
+            return {
+              [COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]: o.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE].value,
+              [TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE]: o.value[TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE].value,
+              [COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE]: o.value[COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE].value
+            }
+          });
+          renderListColumn(listColumns);
+          
+          listBreakTime = event[BREAK_TIME_TABLE_FIELD_CODE].value
+          .filter(o => o.value[BREAK_TIME_NAME_FIELD_CODE]?.value) 
+          .map(o => {
+            return {
+              [BREAK_TIME_NAME_FIELD_CODE]: o.value[BREAK_TIME_NAME_FIELD_CODE].value,
+              [BREAK_TIME_FIELD_CODE]: o.value[BREAK_TIME_FIELD_CODE].value
+            };
+          });
+          renderListBreakTime(listBreakTime);
+          $('#addNewEvent_Date').val(event[ACTUAL_DATE_FIELD_CODE].value);
+          $('#addNewEvent_StartTime').val(event[ACTUAL_START_DATE_TIME_FIELD_CODE].value);
+          $('#addNewEvent_EndTime').val(event[ACTUAL_END_DATE_TIME_FIELD_CODE].value);
+        }
+        
+        $("#addNewEvent_OK").on("click", function(){
+          // hide error
+          $('[class$="-error"]').hide();
+          const fieldId = $("#addNewEvent_Field").val();
+          const sectionName = $("#addNewEvent_Section option:selected").text();
+          const cropId = $("#addNewEvent_Crop").val();
+          const workId = $("#addNewEvent_Work").val();
+          const actualDate = $("#addNewEvent_Date").val();
+          const actualStartTime = $("#addNewEvent_StartTime").val();
+          const actualEndTime = $("#addNewEvent_EndTime").val();
+          const actualColumn =  $("#addNewEvent_ActualColumn").val();
+          const toggleSelectedId = $('#addNewEvent_Toggle input[name="toggle"]:checked').attr('id');
+          const workOn = toggleSelectedId == "addNewEvent_toggleColumn" ? '列' : '区画';
+          
+          if (option == OPTION_ADD_EVENT_START_NEW){
+            const listChoiceColumns = choices?.getValue(true) || [];
+            listColumns = listChoiceColumns.map(o => ({"列名": o}));
+          }
+          
+          // validate
+          let check = true;
+          if (!fieldId){
+            $('.add-new-event-field-error').show();
+            check = false;
+          }
+          if (!sectionName){
+            $('.add-new-event-section-error').show();
+            check = false;
+          }
+          if (!actualColumn && option == OPTION_ADD_EVENT_REGISTER_COMPLETED){
+            $('.add-new-event-actual-column-error').show();
+            check = false;
+          }
+          if (!workId){
+            $('.add-new-event-work-error').show();
+            check = false;
+          }
+          if (!actualDate && option == OPTION_ADD_EVENT_REGISTER_COMPLETED){
+            $('.add-new-event-date-error').show();
+            check = false;
+          }
+          if (!actualStartTime && option == OPTION_ADD_EVENT_REGISTER_COMPLETED){
+            $('.add-new-event-starttime-error').show();
+            check = false;
+          }
+          if (!actualEndTime && option == OPTION_ADD_EVENT_REGISTER_COMPLETED){
+            $('.add-new-event-endtime-error').show();
+            check = false;
+          }
+          if (workOn == COLUMN_OPTION_VALUE && listColumns.length == 0){
+            $('.add-new-event-column-error').show();
+            check = false;
+          }
+          if (!check){
+            return;
+          }
+          
+          const now = moment();
+          
+          let postData = {
+            assignee: kintoneLoginUser['メールアドレス'].value,
+            actualEmail: kintoneLoginUser['メールアドレス'].value,
+            workStatus: WORK_STATUS_PROCESSING,
+            fieldId,
+            cropId,
+            workId,
+            sectionName,
+            listColumns,
+            workOn,
+            planDate: now.format('YYYY-MM-DD'),
+            planStartTime: now.format('HH:mm'),
+            planEndTime: now.format('HH:mm'),
+            actualDate: now.format('YYYY-MM-DD'),
+            actualStartTime: now.format('HH:mm'),
+            actualColumn,
+            totalColumns,
+            creatorType: "作業者"
+          }
+          
+          if (option == OPTION_ADD_EVENT_REGISTER_COMPLETED){
+            postData = {
+              assignee: kintoneLoginUser['メールアドレス'].value,
+              actualEmail: kintoneLoginUser['メールアドレス'].value,
+              workStatus: WORK_STATUS_COMPLETED,
+              fieldId,
+              cropId,
+              sectionName,
+              workId,
+              planDate: actualDate,
+              planStartTime: actualStartTime,
+              planEndTime: actualEndTime,
+              actualDate,
+              actualStartTime,
+              actualEndTime,
+              breakTime: listBreakTime,
+              workOn,
+              listColumns,
+              actualColumn,
+              totalColumns,
+              creatorType: "作業者"
+            }
+          }
+          
+            
+          console.log('postData', postData);
+          if (mode == "ADD"){
+            workService.addWork(postData).then(async (result) => {
+              console.log('result', result);
+              const record = await workService.getWorkById(result['id']);
+              await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.createSharePointItem(record).then(result => console.log(result)).catch(error => console.log(error));
+              modalAddNewEvent.modal("hide");
+              if (option == OPTION_ADD_EVENT_START_NEW){
+                localStorage.setItem(LOCALSTORAGE_CACHE_WORK_START_TIME, moment().format('YYYY-MM-DD HH:mm:ss'))
+                localStorage.setItem(LOCALSTORAGE_CACHE_BREAK_TIME, [])
+              }
+              showDetailEvent(result['id']);
+              
+            }).catch((error) => {
+              alert('実績の追加に失敗しました');
+            })
+          }
+          else {
+            workService.updateWorkById(event['$id'].value, postData).then(async (result) => {
+              console.log('result', result);
+              const record = await workService.getWorkById(event['$id'].value);
+              await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.updateSharePointItem(record).then(result => console.log(result)).catch(error => console.log(error));
+              modalAddNewEvent.modal("hide");
+              showDetailEvent(event['$id'].value);
+              
+            }).catch((error) => {
+              alert('実績の編集に失敗しました');
+            })
+          }
+          
+        });
+        
+        $('#addNewEvent_Cancel').on('click', function(){
+          modalAddNewEvent.modal("hide");
+        })
+        
+        modalAddNewEvent.on("hidden.bs.modal", function () {
+          modalAddNewEvent.remove();
+        });
+      }
+      function showModalSelectSectionOrColumn (fieldID, sectionName, workOn = SECTION_OPTION_VALUE, callback){
+        const modal = $(`
+          <div class="modal fade" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content p-3" style="min-width: 300px; font-size: 1.5em">
+                <div class="modal-title mb-3 text-center" style="font-size: 1.2em">${workOn == COLUMN_OPTION_VALUE ? "列を選択してください" : "区画を選択してください"}</div>
+                <div class="modal-body">
+                  <form>
+                    <div class="text-center" id="modalSelectSectionOrColumn_FieldName" >圃場「」の区画一覧</div>
+                    <div>区画名</div>
+                    <div class="form-group">
+                      <select style="font-size: 1em" id="selectSection" class="form-control" disabled>
+                        <option value="">-- 区画を選択してください --</option>
+                      </select>
+                    </div>
+                    ${
+                      workOn == COLUMN_OPTION_VALUE ? 
+                      `
+                        <div>列名</div>
+                        <div class="form-group">
+                          <select style="font-size: 1em" id="selectColumn" class="form-control" multiple>
+                          </select>
+                          <span class="selectColumn-error" style="color: red; font-size: 13px; display: none;">1つ以上の列を選択してください</span>
+                        </div>
+                      `
+                      :
+                      ``
+                    }
+                    
+                    
+                    <div class="text-center mt-3">
+                      <button type="button" id="modalSelectSectionOrColumn_CancelBtn" style="width: 120px; padding:8px 16px;border:1px solid #333;background:white;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">
+                        キャンセル
+                      </button>
+                      
+                      <button type="submit" id="modalSelectSectionOrColumn_OKBtn" class="mr-2" style="width: 120px; padding:8px 16px;border:none;background:#e65c70;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">
+                        確定
+                      </button>
+                      
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        `);
+        $('body').append(modal);
+        modal.modal("show");
+        let listSections = [];
+        fieldMasterService.getFieldById(fieldID).then((result) => {
+          listSections = result[DETAIL_SECTION_FIELD_CODE].value;
+          console.log('result', result);
+          $('#modalSelectSectionOrColumn_FieldName').text(`圃場「${result[FIELD_NAME_FIELD_CODE].value}」の区画一覧`);
+          $('#selectSection').empty();
+          $('#selectSection').append(`<option value="" disabled selected hidden>-- 区画を選択してください --</option>`);
+          for (const item of listSections){
+            $('#selectSection').append(`<option value="${item.value[SECTION_NAME_FIELD_CODE].value}">${item.value[SECTION_NAME_FIELD_CODE].value}</option>`)
+          }
+          $('#selectSection').val(sectionName);
+          $('#selectSection').trigger('change');
+          
+        });
+        
+        if ($('#selectColumn').length > 0){
+          const choices = new Choices('#selectColumn', {
+            removeItemButton: true,
+            placeholder: true,
+            searchEnabled: false,
+            shouldSort: false,
+            position: 'bottom',
+            duplicateItemsAllowed: false,
+            renderSelectedChoices: 'always'
+          });
+      
+          $('.choices').on('click', () => {
+            choices.showDropdown();
+          });
+          
+          
+          $('#selectSection').on('change', function(){
+            const sectionValue = $(this).val();
+            if (!sectionValue) return;
+            const selectedSection = listSections.find(o => o.value[SECTION_NAME_FIELD_CODE].value == sectionValue);
+            console.log('selectedSection', selectedSection);
+            $('#selectColumn').empty();
+            const listColumns = selectedSection.value[LIST_COLUMN_OF_SECTION_FIELD_CODE].value.split(';');
+            for (const item of listColumns){
+              $('#selectColumn').append(`<option value="${item}">${item}</option>`)
+            } 
+            
+            const newOptions = listColumns.map(o => {
+              return { value: o, label: o, selected: false };
+            });
+            
+            choices.clearStore(); 
+            choices.setChoices(newOptions, 'value', 'label', true); 
+            
+          });
+          $('#modalSelectSectionOrColumn_OKBtn').on('click', function(){
+            // validate
+            $('.selectColumn-error').hide();
+            if (choices?.getValue(true)?.length == 0){
+              $('.selectColumn-error').show();
+              return;
+            }
+            
+            modal.modal("hide");
+            callback({
+              sectionName: $('#selectSection option:checked').text(),
+              listColumns: choices.getValue(true),
+              workOn: workOn
+            });
+          })
+        }
+        
+        else {
+          $('#modalSelectSectionOrColumn_OKBtn').on('click', function(){
+            modal.modal("hide");
+            callback({
+              sectionName: $('#selectSection option:checked').text(),
+              listColumns: [],
+              workOn: workOn
+            });
+          })
+        }
+        
+        
+        $('#modalSelectSectionOrColumn_CancelBtn').on('click', function(){
+          modal.modal("hide");
+        })
+        
+        modal.on("hidden.bs.modal", function () {
+          modal.remove();
+        });
+                
+      }
+      
+      function showModalAddBreakTime (callback){
+        const modalAddBreakTime = $(`
+          <div class="modal fade" id="addBreakTimeModal" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content p-3" style="min-width: 300px; font-size:14px">
+                <div class="modal-title mb-3 text-center">${BREAK_TIME_HEADER}</div>
+                <div class="modal-body">
+                  <form>
+                    <div class="form-group">
+                      <label class="required">休憩名</label>
+                      <select style="font-size: 14px" id="selectBreakTime" class="form-control">
+                        
+                      </select>
+                      <span class="selectBreakTime-error" style="color: red; font-size: 13px; display: none;">${REQUIRED_ERROR_MESSAGE}</span>
+                    </div>
+                    <div class="form-row">
+                      <div class="form-group col">
+                        <label class="required">休憩時間</label>
+                        <!-- <input style="font-size: 14px" type="time" id="timeSpent" class="form-control"> -->
+                        <input style="font-size: 14px" id="timeSpent" class="form-control">
+                        <span class="timeSpent-error" style="color: red; font-size: 13px; display: none;">${REQUIRED_ERROR_MESSAGE}</span>
+                    
+                      </div>
+                    </div>
+                    <div class="text-center mt-3">
+                      
+                      <button type="button" id="modalAddBreakTime_CancelBtn" class="btn btn-warning" style="width: 120px; padding:8px 16px;border:2px solid #333;background:white;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">キャンセル</button>
+                      <button type="submit" id="modalAddBreakTime_OKBtn" class="btn btn-primary ml-2" style="width: 120px; padding:8px 16px;border:2px solid #333;background:#e65c70;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">確定</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        `);
+        
+        $('body').append(modalAddBreakTime);
+        
+        const breakTimePicker = new TimePickerCustomize($("#timeSpent")[0], {
+          disabled: false
+        });
+        
+        modalAddBreakTime.modal("show");
+        let listBreakTime = [];
+        breakTimeService.getListBreakTime().then((result) => {
+          listBreakTime = result;
+          listBreakTime.push({
+            "$id": {
+              value: "-1"
+            },
+            "休憩名": {
+              value: "カスタマイズ"
+            },
+            "開始": {
+              value: "00:00"
+            },
+            "終了": {
+              value: "00:00"
+            }
+          })
+          console.log('result', result);
+          $('#selectBreakTime').empty();
+          $('#selectBreakTime').append(`<option value=""></option>`);
+          for (const item of result){
+            $('#selectBreakTime').append(`<option value="${item['$id'].value}">${item['休憩名'].value}</option>`)
+          }
+          $('#selectBreakTime').trigger('change');
+        });
+        
+        $('#selectBreakTime').on('change', function(){
+          const selectedId = $(this).val();
+          const selectedBreakTime = listBreakTime.find(o => o['$id'].value == selectedId);
+          if (selectedId && selectedId != "-1"){
+            $('#timeSpent').prop('disabled', true);
+          }
+          else {
+            $('#timeSpent').prop('disabled', false);
+          }
+          if (!selectedBreakTime) return;
+          const [sH, sM] = selectedBreakTime['開始'].value.split(':').map(Number);
+          const [eH, eM] = selectedBreakTime['終了'].value.split(':').map(Number);
+          let min = (eH * 60 + eM) - (sH * 60 + sM);
+          
+          const formatted = `${String(min / 60 | 0).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+          console.log(formatted);
+          $('#timeSpent').val(formatted);
+        });
+        
+        $('#modalAddBreakTime_OKBtn').on('click', function(){
+          $('.selectBreakTime-error').hide();
+          $('.timeSpent-error').hide();
+          // validate
+          let check = true;
+          if (!$('#selectBreakTime').val()){
+            $('.selectBreakTime-error').show();
+            check = false;
+          }
+          if (!$('#timeSpent').val()){
+            $('.timeSpent-error').show();
+            check = false;
+          }
+          if (!check) return;
+          callback({
+            "休憩名": $('#selectBreakTime option:selected').text(),
+            "休憩時間": $('#timeSpent').val()
+          });
+          modalAddBreakTime.modal("hide");
+        })
+        
+        $('#modalAddBreakTime_CancelBtn').on('click', function(){
+          modalAddBreakTime.modal("hide");
+        })
+        
+        modalAddBreakTime.on("hidden.bs.modal", function () {
+          modalAddBreakTime.remove();
+        });
+                
+      }
+      
+      function showModalAddColumn (listColumns = [], callback){
+        const modalAddColumn = $(`
+          <div class="modal fade" tabindex="-1" role="dialog" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+              <div class="modal-content p-3" style="min-width: 300px; font-size: 14px">
+                <div class="modal-title mb-3 text-center" style="font-size: 14px">
+                  <p>列名と作業時間を登録してください</p>
+                </div>
+                <div class="modal-body">
+                  <form>
+                    <div class="form-group">
+                      <label>列名</label>
+                      <select style="font-size: 14px" id="selectColumn" class="form-control">
+                        
+                      </select>
+                      <span class="selectColumn-error" style="color: red; font-size: 13px; display: none;">${REQUIRED_ERROR_MESSAGE}</span>
+                    </div>
+                    <div class="form-group ">
+                      <div>
+                        <label>列作業時間</label>
+                        <input style="font-size: 14px" id="timeSpent" class="form-control">
+                        <span class="timeSpent-error" style="color: red; font-size: 13px; display: none;">${REQUIRED_ERROR_MESSAGE}</span>
+                      </div>
+                      <div class="mt-2">
+                        <label>実績（％）</label>
+                        <select style="font-size: 14px" type="time" id="columnPercent" class="form-control">
+                          ${ 
+                            [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map(o => {
+                              return `<option value=${o}>${o}</option>`
+                            })
+                          }
+                        </select>
+                        <span class="columnPercent-error" style="color: red; font-size: 13px; display: none;">${MUST_SELECT_AT_LAEST_ONE_OPTION}</span>
+                      </div>
+                    </div>
+                    <div class="text-center mt-3">
+                      <button type="button" id="modalAddColumn_CancelBtn" class="btn btn-warning" style="width: 120px; font-weight: bold; padding:8px 16px;border:2px solid #333;background:white;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">キャンセル</button>
+                      <button type="submit" id="modalAddColumn_OKBtn" class="btn btn-primary mr-2" style="width: 120px; font-weight: bold; padding:8px 16px;border:2px solid #333;background:#e65c70;color:#000;border-radius:6px;font-size:14px;cursor:pointer;">確定</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        `)
+        
+        $('body').append(modalAddColumn);
+        
+        const timePicker = new TimePickerCustomize($("#timeSpent")[0], {
+          disabled: false
+        });
+        
+        modalAddColumn.modal("show");
+        $('#selectColumn').empty();
+        $('#selectColumn').append(`<option value=""></option>`)
+        for (const item of listColumns){
+          $('#selectColumn').append(`<option value="${item}">${item}</option>`)
+        }
+        $('#selectColumn').trigger('change');
+        
+        $('#selectColumn').on('change', function(){
+          const selectedId = $(this).val();
+        });
+        
+        $('#modalAddColumn_OKBtn').on('click', function(){
+          $('.selectColumn-error').hide();
+          $('.timeSpent-error').hide();
+          $('.columnPercent-error').hide();
+          // validate
+          let check = true;
+          if (!$('#selectColumn').val()){
+            $('.selectColumn-error').show();
+            check = false;
+          }
+          if (!$('#timeSpent').val()){
+            $('.timeSpent-error').show();
+            check = false;
+          }
+          if (!$('#columnPercent').val()){
+            $('.columnPercent-error').show();
+            check = false;
+          }
+          if (!check) return;
+          callback({
+            [COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]: $('#selectColumn option:selected').text(),
+            [TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE]: $('#timeSpent').val(),
+            [COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE]: $('#columnPercent').val()
+          });
+          modalAddColumn.modal("hide");
+        })
+        
+        $('#modalAddColumn_CancelBtn').on('click', function(){
+          modalAddColumn.modal("hide");
+        })
+        
+        modalAddColumn.on("hidden.bs.modal", function () {
+          modalAddColumn.remove();
+        });
+                
+      }
+      
+      
+      
+      function startEvent(event, {sectionName, listColumns, workOn}){
+        console.log('event', event);
+        console.log('sectionName', sectionName, 'listColumns', listColumns, 'workOn', workOn);
+        localStorage.setItem(LOCALSTORAGE_CACHE_WORK_START_TIME, moment().format('YYYY-MM-DD HH:mm:ss'));
+        
+        loadingModal.show();
+        workService.updateWorkById(event['$id'].value, {
+          actualEmail: kintoneLoginUser['メールアドレス'].value,
+          actualDate: moment().format('YYYY-MM-DD'),
+          actualStartTime: moment().format('HH:mm'),
+          workStatus: WORK_STATUS_PROCESSING,
+          workOn,
+          sectionName,
+          listColumns: listColumns ? listColumns.map(o => ({ '列名': o })) : undefined
+        }).then((result) => {
+          showDetailEvent(event['$id'].value);
+          loadingModal.hide();
+        }).catch(e => {
+          console.error(e);
+        })
+      }
+      function getListBreakTimeCache(){
+        let listBreakTimes = localStorage.getItem(LOCALSTORAGE_CACHE_BREAK_TIME);
+        if (!listBreakTimes){
+          listBreakTimes = []
+        }
+        else {
+          try {
+            listBreakTimes = JSON.parse(listBreakTimes);
+          }
+          catch (e){
+            listBreakTimes = [];
+          }
+        }
+        return listBreakTimes;
+      }
+      function stopEvent(event){
+        let listBreakTimes = getListBreakTimeCache();
+        const now = moment();
+        const updateData = {
+          actualEndTime: now.format('HH:mm'),
+          breakTime: listBreakTimes.map(o => {
+            const diffMs = moment(o.end).diff(moment(o.start));
+            let totalSeconds = Math.floor(diffMs / 1000);
+            let minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            
+            if (seconds >= 30) {
+              minutes += 1;
+            }
+            
+            const hours = Math.floor(minutes / 60).toString().padStart(2, '0');
+            const mins = (minutes % 60).toString().padStart(2, '0');
+            
+            return {
+              "休憩名": '自動作成',
+              "休憩時間": `${hours}:${mins}`
+            };
+          }),
+          workStatus: WORK_STATUS_COMPLETED
+        }
+        
+        if (event[SECTION_OR_COLUMN_FIELD_CODE].value == SECTION_OPTION_VALUE){
+          const modal = $(`<div class="custom-modal">
+            <div class="custom-modal-content" id="performance-content"></div>
+          </div>`);
+          $('body').append(modal);
+          const container = $(`<div class="d-flex flex-column"></div>`);
+          const label = $(`<label class="d-flex flex-column-reverse"><b>実績（列数）</b></label>`);
+          const divContainer = $(`<div class="d-flex flex-row justify-content-center"></div>`);
+          const inputValueDiv = $('<div style="margin: 5px 5px; border-radius: 5px; "></div>');
+          const inputValue = $(`<input type="number" style="padding: 5px 5px; width: 100px;" disabled></input>`);
+          inputValueDiv.append(inputValue);
+          const totalColumnsHtml = $(`<div style="margin-top: 12px;">/ ${event[TOTAL_COLUMNS_FIELD_CODE].value} 列</div>`)
+          divContainer.append(inputValueDiv, totalColumnsHtml);
+          container.append(label, divContainer);
+          
+          inputValue.on('change', function(){
+            let value = inputValue.val();
+            event[ACTUAL_COLUMN_FIELD_CODE] = {
+              value: value
+            }
+          });
+          inputValue.on('input', function(){
+            let value = +inputValue.val();
+            if (value < 0) {
+              value = 0;
+            }
+            else if (value > event[TOTAL_COLUMNS_FIELD_CODE].value){
+              value = event[TOTAL_COLUMNS_FIELD_CODE].value
+            }
+            inputValue.val(value);
+          });
+          inputValue.val(event[TOTAL_COLUMNS_FIELD_CODE].value);
+          inputValue.trigger('change');
+          
+          const footer = $(`<div class="mt-5"></div>`);
+          const btnSkip = $(`<button class="btn-control-work" style="background-color: ${BG_COLOR_WARNING}">スキップ</button>`);
+          const btnEnableEdit = $(`<button class="btn-control-work ml-3" style="background-color: ${BG_BUTTON_OK}">調整</button>`);
+          const btnOK = $(`<button class="btn-control-work ml-3" style="background-color: ${BG_BUTTON_OK}">確定</button>`);
+          btnOK.hide();
+          
+          footer.append(btnSkip, btnEnableEdit, btnOK);
+          
+          $('#performance-content').append(container, footer);
+          
+          function saveData(mode = "SKIP"){
+            updateData['listColumns'] = event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value.map(o => {
+              return {
+                [COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]: o.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE].value
+              };
+            });
+            updateData['actualColumn'] = event[ACTUAL_COLUMN_FIELD_CODE].value;
+            
+            loadingModal.show();
+            workService.updateWorkById(event['$id'].value, updateData).then(async (result) => {
+              const record = await workService.getWorkById(event['$id'].value);
+              await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.updateSharePointItem(record).then(result => console.log(result)).catch(error => console.log(error));
+              showDetailEvent(event['$id'].value);
+              loadingModal.hide();
+            }).finally(() => {
+              modal.remove();
+            });
+          }
+          
+          btnSkip.on('click', () => saveData("SKIP"));
+          btnOK.on('click', () => saveData("ADJUSTMENT"));
+          
+          btnEnableEdit.on('click', function(){
+            btnEnableEdit.hide();
+            btnOK.show();
+            $('#performance-content input').prop('disabled', false);
+          })
+          
+          
+        }
+        else {
+          const modal = $(`<div class="custom-modal">
+            <div class="custom-modal-content" id="performance-content"></div>
+          </div>`);
+          $('body').append(modal);
+          const container = $(`<div class="d-flex flex-column"></div>`);
+          const label = $(`<label class="d-flex flex-column-reverse"><b>実績の詳細（時：分：パーセント）</b></label>`);
+          const listColumnHtml = $(`<div class="d-flex flex-column"></div>`);
+          
+          const cacheStartTime = localStorage.getItem(LOCALSTORAGE_CACHE_WORK_START_TIME);
+          const startTime = moment(cacheStartTime);
+          const endTime = now;
+          
+          let diffMinutes = endTime.diff(startTime, 'minutes');
+          if (diffMinutes < 0) {
+            diffMinutes += 1440;
+          }
+          const listColumns = event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value.length;
+          const avgMinutes = diffMinutes / listColumns;
+          
+          const hours = Math.floor(avgMinutes / 60);
+          const minutes = Math.round(avgMinutes % 60);
+          const hhmm = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+          
+          const listTimePicker = [];
+          
+          for (const item of event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value){
+            const itemDiv = $(`<div class="d-flex flex-row"></div>`);
+            const rowNameHtml = $(`<div style="background-color: #d5f5e3; padding: 5px 5px; margin: 5px 5px; border-radius: 5px; width: 100px;">${item.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE].value}</div>`);
+            const inputValueDiv = $(`<div style="margin: 5px 5px; border-radius: 5px; "></div>`);
+            const inputValue = $(`<input style="padding: 5px 5px; width: 100px;" disabled></input>`);
+            const inputPercentValueDiv = $(`<div style="margin: 5px 5px; border-radius: 5px;"></div>`);
+            const inputPercentValue = $(`<select style="padding: 5px 5px; width: 100px;" disabled>
+              ${ 
+                [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0].map(o => {
+              	  return `<option value=${o}>${o}</option>`
+              	})
+              }
+            </select>`);
+            inputValueDiv.append(inputValue);
+            
+            inputPercentValueDiv.append(inputPercentValue);
+            inputValue.on('change', function(){
+              item.value[TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE].value = $(this).val();
+            });
+            inputPercentValue.on('change', function(){
+              item.value[COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE].value = $(this).val();
+            });
+            inputValue.val(hhmm);
+            inputPercentValue.val(100);
+            inputValue.trigger('change');
+            inputPercentValue.trigger('change');
+            itemDiv.append(rowNameHtml, inputValueDiv, inputPercentValueDiv);
+            listColumnHtml.append(itemDiv);
+            
+            const timePicker = new TimePickerCustomize(inputValue, {
+              disabled: true
+            });
+            
+            listTimePicker.push(timePicker);
+          }
+          container.append(label, listColumnHtml);
+          
+          const footer = $(`<div class="mt-5"></div>`);
+          const btnSkip = $(`<button class="btn-control-work" style="background-color: ${BG_COLOR_WARNING}">スキップ</button>`);
+          const btnEnableEdit = $(`<button class="btn-control-work ml-3" style="background-color: ${BG_BUTTON_OK}">調整</button>`);
+          const btnOK = $(`<button class="btn-control-work ml-3" style="background-color: ${BG_BUTTON_OK}">確定</button>`);
+          btnOK.hide();
+          
+          footer.append(btnSkip, btnEnableEdit, btnOK);
+          
+          $('#performance-content').append(container, footer);
+          
+          function saveData(mode = "SKIP"){
+            updateData['listColumns'] = event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value.map(o => {
+              return {
+                [COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]: o.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE].value,
+                [TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE]: mode == "SKIP" ? hhmm : o.value[TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE].value,
+                [COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE]: mode == "SKIP" ? 100 : o.value[COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE].value
+              };
+            });
+            updateData['actualColumn'] = event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value.length;
+            loadingModal.show();
+            workService.updateWorkById(event['$id'].value, updateData).then(async (result) => {
+              const record = await workService.getWorkById(event['$id'].value);
+              await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.updateSharePointItem(record).then(result => console.log(result)).catch(error => console.log(error));
+              showDetailEvent(event['$id'].value);
+              loadingModal.hide();
+            }).finally(() => {
+              modal.remove();
+            })
+          }
+          
+          btnSkip.on('click', () => saveData("SKIP"));
+          btnOK.on('click', () => saveData("ADJUSTMENT"));
+          
+          btnEnableEdit.on('click', function(){
+            btnEnableEdit.hide();
+            btnOK.show();
+            $('#performance-content input, #performance-content select').prop('disabled', false);
+            for (const itemPicker of listTimePicker){
+              itemPicker.updateOptions({ disabled: false });
+            }
+          })
+        }
+        
+      }
+      function handleEditEvent(event){
+        showModalAddAndEditEvent(OPTION_ADD_EVENT_REGISTER_COMPLETED, event, "EDIT");
+        // breakTimeService.getListBreakTime().then((result) => {
+        //   loadingModal.show();
+        //   const editEventModal = $(`<div class="custom-modal">
+        //     <div class="custom-modal-content" id="edit-event-content"></div>
+        //   </div>`);
+        //   $('body').append(editEventModal);
+        //   const editContainer = $(`<div style="width: 300px"></div>`);
+          
+        //   const row_1 = $('<div class="d-flex mb-3"></div>');
+        //   const label_1 = $('<label class="required" style="width: 50px; text-align: left">開始</label>');
+        //   const div_1 = $('<div class="text-left"></div>');
+        //   const inputError_1 = $('<small style="color: red"></small>');
+        //   const input_1 = $('<input style="width: 200px; height: 40px" class="form-control form-control-lg" type="time" />');
+        //   input_1.val(event[ACTUAL_START_DATE_TIME_FIELD_CODE].value)
+        //   div_1.append(input_1, inputError_1);
+        //   row_1.append(label_1, div_1);
+          
+        //   const row_2 = $('<div class="d-flex mb-3"></div>');
+        //   const div_2 = $('<div class="text-left"></div>');
+        //   const inputError_2 = $('<small style="color: red"></small>');
+        //   const label_2 = $('<label class="required" style="width: 50px; text-align: left">終了</label>');
+        //   const input_2 = $('<input style="width: 200px; height: 40px" class="form-control form-control-lg" type="time" />');
+        //   input_2.val(event[ACTUAL_END_DATE_TIME_FIELD_CODE].value);
+        //   div_2.append(input_2, inputError_2);
+        //   row_2.append(label_2, div_2);
+          
+        //   const breakTimeData = event[BREAK_TIME_TABLE_FIELD_CODE].value.map(o => o['value'][BREAK_TIME_NAME_FIELD_CODE]['value']);
+        //   const row_3 = $('<div class="d-flex mb-3"></div>');
+        //   const div_3 = $('<div class="text-left"></div>');
+        //   const selectError = $('<small style="color: red; display: block"></small>');
+        //   const label_3 = $('<label style="width: 50px; text-align: left">休暇</label>');
+        //   const select = $(`<select multiple class="form-control-lg" style="width: 200px; height: 40px;"></select>`);
+        //   for (const item of result){
+        //     select.append(`<option value="${item['$id'].value}">${item[BREAK_TIME_NAME_FIELD_CODE].value} - ${item[BREAK_TIME_FIELD_CODE].value}</option>`)
+        //   };
+        //   select.find('option').each(function() {
+        //     $(this).prop('selected', breakTimeData.includes($(this).val()));
+        //   });
+        //   div_3.append(select, selectError);
+        //   row_3.append(label_3, div_3);
+          
+        //   const row_4 = $('<div class="d-flex mb-3"></div>');
+        //   const label_4 = $('<label style="width: 50px; text-align: left">実績数</label>');
+        //   const input_4 = $('<input style="width: 100px; height: 40px" class="form-control form-control-lg mr-3" type="number" pattern="[0-9]*" inputmode="numeric"/>');
+        //   const unit = $(`<span></span>`);
+        //   // input_4.val(event[NUMBER_OF_ACHIEVEMENTS_FIELD_CODE].value)
+        //   row_4.append(label_4, input_4, unit);
+          
+        //   editContainer.append(row_1, row_2, row_3, row_4);
+          
+        //   const footerDiv = $(`<div class="mt-5"></div>`);
+        //   const btnCancel = $(`<button class="btn-control-work" style="background-color: ${BG_COLOR_WARNING}">キャンセル</button>`);
+        //   const btnOK = $(`<button class="btn-control-work mr-3" style="background-color: ${BG_COLOR_EVENT_PROCESSING}">OK</button>`);
+        //   footerDiv.append(btnOK, btnCancel);
+          
+        //   $('#edit-event-content').append($(`<div class="mb-3"><b>${EDIT_EVENT_MODAL_HEADER}</b></div>`), editContainer, footerDiv);
+          
+          
+          
+        //   btnCancel.on('click', function(){
+        //     editEventModal.remove()
+        //     loadingModal.hide();
+        //   })
+        //   btnOK.on('click', () => {
+        //     inputError_1.text('');
+        //     inputError_2.text('');
+        //     selectError.text('');
+            
+        //     const actualStartTime = input_1.val();
+        //     const actualEndTime = input_2.val();
+        //     const breakTimeList = select.val().map(o => result.find(breakTime => breakTime['$id'].value == o));
+            
+        //     let validate = true;
+        //     if (!actualStartTime || !actualEndTime){
+        //       if (!actualStartTime){
+        //         inputError_1.text(REQUIRED);
+        //         validate = false;
+        //       }
+              
+        //       if (!actualEndTime){
+        //         inputError_2.text(REQUIRED);
+        //         validate = false;
+        //       }
+        //     }
+        //     else {
+        //       if (+HHmmToMinutes(actualStartTime) > +HHmmToMinutes(actualEndTime)){
+        //         inputError_1.text(START_DATE_MUST_LESS_THAN_END_DATE);
+        //         validate = false;
+        //       }
+        //       console.log('breakTimeList', breakTimeList);
+        //       let totalBreakTime = 0;
+        //       for (const item of breakTimeList){
+        //         totalBreakTime += +HHmmToMinutes(item['休憩時間'].value);
+        //       }
+        //       if (HHmmToMinutes(actualEndTime) - HHmmToMinutes(actualStartTime) - totalBreakTime < 0){
+        //         selectError.text(TOTAL_BREAK_TIME_MUST_BE_LESS_THAN_WORKING_TIME);
+        //         validate = false;
+        //       }
+        //     }
+        //     if (!validate) return;
+            
+        //     const breakTime = select.val();
+        //     const numberOfAchievements = input_4.val();
+            
+        //     workService.updateWorkById(event['$id'].value, {
+        //       actualStartTime,
+        //       actualEndTime,
+        //       breakTime,
+        //       numberOfAchievements,
+        //       workStatus: WORK_STATUS_COMPLETED
+        //     }).then((result) => {
+        //       console.log('result', result);
+        //     }).catch(e => {
+              
+        //     }).finally(() => {
+        //       editEventModal.remove();
+        //       showDetailEvent(event['$id'].value);
+        //     })
+        //   })
+        // })
+      }
+      function handleBreakTime(event){
+        breakTimeService.getListBreakTime().then((result) => {
+          loadingModal.show();
+          const breakTimeModal = $(`<div class="custom-modal">
+            <div class="custom-modal-content" id="break-time-content"></div>
+          </div>`);
+          $('body').append(breakTimeModal);
+          const select = $(`<select class="form-control-lg m-3 p-2" style="width: 300px"></select>`);
+          
+          const footerDiv = $(`<div></div>`);
+          const btnCancel = $(`<button class="btn-control-work" style="background-color: ${BG_COLOR_WARNING}">キャンセル</button>`);
+          const btnOK = $(`<button class="btn-control-work mr-3" style="background-color: ${BG_COLOR_EVENT_PROCESSING}">OK</button>`);
+          footerDiv.append(btnOK, btnCancel);
+          
+          $('#break-time-content').append($(`<div><b>${BREAK_TIME_HEADER}</b></div>`),select, footerDiv);
+          
+          for (const item of result){
+             select.append(`<option value="${item['$id'].value}">${item['休憩名'].value} - ${item[BREAK_TIME_FIELD_CODE].value}</option>`)
+          };
+          
+          btnCancel.on('click', function(){
+            breakTimeModal.remove()
+            loadingModal.hide();
+          })
+          btnOK.on('click', () => {
+            const breakTimeId = select.val();
+            workService.addBreakTime(event['$id'].value, breakTimeId).then((result) => {
+              console.log('result', result);
+            }).catch(e => {
+              console.error(e);
+            }).finally(() => {
+              breakTimeModal.remove();
+              showDetailEvent(event['$id'].value);
+            })
+          })
+        })
+      }
+      async function updateStatusAbnormalEvent(events){
+        try {
+          const promises = [];
+          for (const event of events){
+            if (event[WORK_STATUS].value != WORK_STATUS_ABNORMAL){
+              const promise = workService.updateWorkById(event['$id'].value, {workStatus: WORK_STATUS_ABNORMAL});
+              promises.push(promise);
+            }
+          }
+          await Promise.all(promises);
+        }
+        catch (e){
+          console.error(e);
+        }
+      }
+      function notiAbnormalEvent(events){
+        if (events.length == 0) return;
+        let message = `ある作業が時間内に完了しませんでした。\nステータスが異常な作業を修正してください。\n`;
+        for (const event of events){
+          message += `• ${event[PLAN_DATE_FIELD_CODE].value} ${event[PLAN_START_DATE_TIME_FIELD_CODE].value} ~ ${event[PLAN_END_DATE_TIME_FIELD_CODE].value}\n`;
+        }
+        alert(message);
+      }
+      function hideDetailEvent(){
+        $('#list-event-item').empty();
+        $('#detail-event').hide();
+        $('#list-event').show();
+        $('#filter-event').show();
+        btnAddNewEvent.show();
+        btnReturnHome.hide();
+        $('#search').trigger('click');
+        updateCountNotCompletedEvent();
+      }
+      function createArrowLeftCanvas(elementId, text, textColor, backgroundColor, width = 120){
+        let canvas = document.getElementById(elementId);
+        let ctx = canvas.getContext("2d");
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(width - 15, 0); 
+        ctx.lineTo(width, 15);  
+        ctx.lineTo(width - 15, 30); 
+        ctx.lineTo(0, 30);  
+        ctx.lineTo(15, 15);   
+        ctx.closePath();
+    
+        ctx.fillStyle = backgroundColor;  
+        ctx.fill();
+    
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#ccc";
+        ctx.stroke();
+    
+        ctx.font = "16px Arial";
+        ctx.fillStyle = textColor;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(text, width / 2 - 3, 15);
+      }
+      async function showDetailEvent(eventId){
+        loadingModal.show();
+        $('#detail-event-container').empty();
+        $('#list-event').hide();
+        $('#filter-event').hide();
+        btnAddNewEvent.hide();
+        btnReturnHome.show();
+        $('#detail-event').show();
+        workService.getWorkById(eventId).then(async (event) => {
+          console.log('showDetailEvent', event);
+          let userPermission = "UNKNOWN_CASE";
+          if (event[WORK_STATUS].value == WORK_STATUS_NOT_START) {
+            userPermission = "CASE_NOTSTARTED_ASSIGNEDUSER_CANSTART";
+          }
+          else if (event[WORK_STATUS].value == WORK_STATUS_PROCESSING){
+            if (event[ACTUAL_EMAIL_FIELD_CODE].value == kintoneLoginUser['メールアドレス'].value) {
+              userPermission = "CASE_INPROGRESS_OWNER_FULLACCESS"
+            }
+            else {
+              userPermission = "CASE_INPROGRESS_NOTOWNER_VIEWONLY"
+            }
+          }
+          else if (event[WORK_STATUS].value == WORK_STATUS_COMPLETED){
+            if (event[ACTUAL_EMAIL_FIELD_CODE].value == kintoneLoginUser['メールアドレス'].value) {
+              if (event[CREATOR_FIELD_CODE]?.value?.code == kintoneLoginUser['メールアドレス'].value){
+                userPermission = "CASE_COMPLETED_OWNER_CREATOR_FULLEDIT"
+              }
+              else {
+                userPermission = "CASE_COMPLETED_OWNER_ADMINCREATED_LIMITEDEDIT"
+              }
+            }
+            else {
+              userPermission = "CASE_COMPLETED_NOTOWNER_NOEDIT"
+            }
+          }
+          else if (event[WORK_STATUS].value == WORK_STATUS_ABNORMAL){
+            if (!event[ACTUAL_EMAIL_FIELD_CODE].value){
+              if (event[EMAIL_FIELD_CODE].value == kintoneLoginUser['メールアドレス'].value){
+                if (event[CREATOR_FIELD_CODE]?.value?.code != kintoneLoginUser['メールアドレス'].value){
+                  userPermission = "CASE_ABNORMAL_NOTSTARTED_ASSIGNED_ADMINCREATED_EDITACTUAL"
+                }
+              }
+              else {
+                userPermission = "CASE_ABNORMAL_NOTSTARTED_NOTASSIGNED_NOEDIT"
+              }
+            }
+            else {
+              if (event[ACTUAL_EMAIL_FIELD_CODE].value == kintoneLoginUser['メールアドレス'].value){
+                if (event[CREATOR_FIELD_CODE]?.value?.code == kintoneLoginUser['メールアドレス'].value){
+                  userPermission = "CASE_ABNORMAL_STARTED_OWNERCREATOR_FULLEDIT"
+                }
+                else {
+                  userPermission = "CASE_ABNORMAL_STARTED_OWNER_ADMINCREATED_LIMITEDEDIT"
+                }
+              }
+              else {
+                userPermission = "CASE_ABNORMAL_STARTED_NOTOWNER_NOEDIT"
+              }
+            }
+          }
+          console.log('userPermission', userPermission)
+          const eventDate = event['予定日'].value;
+          $('#list-event').hide();
+          const detailEventContainer = $('#detail-event-container');
+          const widthArrowLeft = window.innerWidth * 0.3;
+          detailEventContainer.empty();
+          if (event[WORK_STATUS].value == WORK_STATUS_COMPLETED){
+            detailEventContainer.append(
+            `
+              <div class="d-flex flex-row justify-content-between">
+                <canvas id="canvas-work-not-start" width="${widthArrowLeft}" height="30"></canvas>
+                <canvas id="canvas-work-processing" width="${widthArrowLeft}" height="30"></canvas>
+                <canvas id="canvas-work-completed" width="${widthArrowLeft}" height="30"></canvas>
+              </div>
+            `
+            );
+            createArrowLeftCanvas("canvas-work-not-start", WORK_STATUS_NOT_START, "#000", BG_COLOR_EVENT_NOT_START, widthArrowLeft);
+            createArrowLeftCanvas("canvas-work-processing", WORK_STATUS_PROCESSING, "#000", BG_COLOR_EVENT_PROCESSING, widthArrowLeft);
+            createArrowLeftCanvas("canvas-work-completed", WORK_STATUS_COMPLETED, "#000", BG_COLOR_EVENT_COMPLETED, widthArrowLeft);
+          }
+          else if (event[WORK_STATUS].value == WORK_STATUS_NOT_START){
+            detailEventContainer.append(
+            `
+              <div class="d-flex flex-row justify-content-between">
+                <canvas id="canvas-work-not-start" width="${widthArrowLeft}" height="30"></canvas>
+                <canvas id="canvas-work-processing" width="${widthArrowLeft}" height="30"></canvas>
+                <canvas id="canvas-work-completed" width="${widthArrowLeft}" height="30"></canvas>
+              </div>
+            `
+            );
+            createArrowLeftCanvas("canvas-work-not-start", WORK_STATUS_NOT_START, "#000", BG_COLOR_EVENT_NOT_START, widthArrowLeft);
+            createArrowLeftCanvas("canvas-work-processing", WORK_STATUS_PROCESSING, "#ccc", "#fff", widthArrowLeft);
+            createArrowLeftCanvas("canvas-work-completed", WORK_STATUS_COMPLETED, "#ccc", "#fff", widthArrowLeft);
+          }
+          else if (event[WORK_STATUS].value == WORK_STATUS_PROCESSING){
+            detailEventContainer.append(
+            `
+              <div class="d-flex flex-row justify-content-between">
+                <canvas id="canvas-work-not-start" width="${widthArrowLeft}" height="30"></canvas>
+                <canvas id="canvas-work-processing" width="${widthArrowLeft}" height="30"></canvas>
+                <canvas id="canvas-work-completed" width="${widthArrowLeft}" height="30"></canvas>
+              </div>
+            `
+            );
+            createArrowLeftCanvas("canvas-work-not-start", WORK_STATUS_NOT_START, "#000", BG_COLOR_EVENT_NOT_START, widthArrowLeft);
+            createArrowLeftCanvas("canvas-work-processing", WORK_STATUS_PROCESSING, "#000", BG_COLOR_EVENT_PROCESSING, widthArrowLeft);
+            createArrowLeftCanvas("canvas-work-completed", WORK_STATUS_COMPLETED, "#ccc", "#fff", widthArrowLeft);
+          }
+          else if (event[WORK_STATUS].value == WORK_STATUS_ABNORMAL){
+            detailEventContainer.append(
+            `
+              <div>
+                <i class="fa fa-exclamation-triangle mt-1" aria-hidden="true" style="color: #ffc000; font-size: 2.4rem;"></i>
+                <span style="font-size: 1.5rem; color: red;">${ALERT_WORK_ABNORMAL}</span>
+              </div>
+            `
+            );
+          }
+          
+          
+          detailEventContainer.append(`
+            <div class="mt-3">
+              <div class="pl-3 pr-3 pt-2 pb-2" style="border: 1px solid #ccc; border-bottom: 0px"><b>作業内容</b></div>
+              <div class="p-3" style="border: 1px solid #ccc">
+                
+                ${event[CREATOR_FIELD_CODE].code == kintoneLoginUser['メールアドレス'].value 
+                ? `<div>予定日 : ${event[PLAN_DATE_FIELD_CODE].value}</div>
+                  <div>開始 ~ 終了 : ${event[PLAN_START_DATE_TIME_FIELD_CODE].value} ~ ${event[PLAN_END_DATE_TIME_FIELD_CODE].value}</div>
+                ` 
+                
+                : ``}
+                <div>作業者 : ${event[EMAIL_FIELD_CODE].value}</div>
+                <div>作付 : ${event[CROP_FIELD_CODE].value}</div>
+                <div>圃場 : ${event[FIELD_FIELD_CODE].value}</div>
+                <div>区画 : ${event[SECTION_FIELD_CODE].value}</div>
+              </div>
+            </div>
+          `);
+          
+          const toggleRowOrSection = $(`<div class="d-flex flex-row">
+            <div class="toggle-button mt-2">
+              <input type="radio" id="toggleSection" name="toggle" ${event[SECTION_OR_COLUMN_FIELD_CODE].value == SECTION_OPTION_VALUE ? "checked" : ""}>
+              <label for="toggleSection">区画</label>
+            
+              <input type="radio" id="toggleColumn" name="toggle" ${event[SECTION_OR_COLUMN_FIELD_CODE].value == COLUMN_OPTION_VALUE ? "checked" : ""}>
+              <label for="toggleColumn">列</label>
+            </div>
+            <div style="font-size: 14px; margin: 10px;">作業の集計単位を選択してください</div>
+          </div>`);
+          
+          if (event[WORK_STATUS].value == WORK_STATUS_NOT_START || event[WORK_STATUS].value == WORK_STATUS_PROCESSING){
+            detailEventContainer.append(toggleRowOrSection);
+            if (event[WORK_STATUS].value == WORK_STATUS_PROCESSING){
+              toggleRowOrSection.find('input').prop('disabled', true);
+            }
+          }
+          
+          
+          let buttonControlContainer = $('<div class="text-center mt-5"></div>');
+          
+          
+          
+          
+          // Check the user in any work
+          const today = moment();
+          searchPlanWork({userSearch: kintoneLoginUser['社員コード'].value, startDate: today, endDate: today, workStatus: [WORK_STATUS_PROCESSING], mode: 'ACTUAL'}).then((events) => {
+            if (!events) {
+              loadingModal.hide();
+              return; 
+            }
+
+            if (events.length == 0){
+              localStorage.setItem(LOCALSTORAGE_CACHE_BREAK_TIME, JSON.stringify([]));
+              const btnStart = $(`<button class="btn-control-work" style="background-color: ${BG_COLOR_EVENT_NOT_START}">開始</button>`);
+              if (userPermission == "CASE_NOTSTARTED_ASSIGNEDUSER_CANSTART" 
+              //&& event[PLAN_DATE_FIELD_CODE].value == moment().format('YYYY-MM-DD')
+              ){
+                buttonControlContainer.append(btnStart); 
+                btnStart.on('click', function (){
+                  console.log('event', event);
+                  const selectedToggle = toggleRowOrSection.find('input[name="toggle"]:checked').attr('id');
+                  if (selectedToggle == "toggleColumn"){
+                    if (
+                      event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value.length == 0
+                      ||
+                      (event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value.length == 1 && !event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value[0].value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE].value)
+                    ){
+                      showModalSelectSectionOrColumn(
+                        event[FIELD_ID_FIELD_CODE].value,
+                        event[SECTION_FIELD_CODE].value,
+                        COLUMN_OPTION_VALUE,
+                        ({ listColumns, workOn, sectionName }) => {
+                          startEvent(event, {
+                            listColumns,
+                            workOn
+                          });
+                        }
+                    );
+                    }
+                    else {
+                      startEvent(event, { });
+                    }
+                    
+                  }
+                  else {
+                    startEvent(event, { workOn: SECTION_OPTION_VALUE}); 
+                  }
+                  
+                });
+              }
+            }
+            else {
+              if (userPermission == "CASE_INPROGRESS_OWNER_FULLACCESS"){
+                let btnBreakTime = $(`<button class="btn-control-work ml-5" style="background-color: ${BG_COLOR_WARNING}">休憩</button>`);
+                const btnStop = $(`<button class="btn-control-work mr-5" style="background-color: ${BG_BUTTON_STOP_EVENT}">終了</button>`);
+                const btnStopBreakTime = $(`<button class="btn-control-work ml-5" style="background-color: ${BG_COLOR_STOP_BREAK_TIME}">再開</button>`);
+                buttonControlContainer.append(btnStop, btnBreakTime, btnStopBreakTime);
+                
+                const currentStatusContainer = $(`<div class="text-center mt-2"></div>`);
+                
+                const iconStatus = $(`<span class="ml-2" style="color: #4ea72e">●</span>`);
+                const textStatus = $(`
+                  <span>
+                    作業中
+                  </span>
+                `);
+                const textSectionAndColumn = $(`
+                  <span>
+                    ${event[SECTION_FIELD_CODE].value} ${event[SECTION_OR_COLUMN_FIELD_CODE].value == COLUMN_OPTION_VALUE 
+                    ? `（${event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value.map(o => o?.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]?.value).join('、')}）`
+                    : ``}
+                  </span>
+                `);
+                currentStatusContainer.append(iconStatus, textStatus, textSectionAndColumn);
+                
+                const workTimerContainer = $(`<div class="text-center" style="font-size: 1.5em;"></div>`);
+                const workTimer = $(`<div></div>`);
+                workTimerContainer.append(workTimer);
+                const currentStatusAndWorkTimeContainer = $(`<div class="mt-2" style="border: 1px solid #ccc; border-radius: 5px"></div>`)
+                currentStatusAndWorkTimeContainer.append(currentStatusContainer, workTimerContainer);
+    
+                const breakTimerContainer = $(`<div class="text-center" style="font-size: 1em; border: 1px solid #FFC000; border-radius: 5px; background-color: #FFF8DC; margin: 0px 10px 10px 10px"></div>`);
+                
+                const breakTimerLabel = $(`<div>休憩時間</div>`)
+                const breakTimer = $(`<div></div>`);
+                breakTimerContainer.append(breakTimerLabel, breakTimer);
+                currentStatusAndWorkTimeContainer.append(breakTimerContainer);
+                
+                detailEventContainer.append(currentStatusAndWorkTimeContainer);
+                
+                let isPause = false;
+                let listBreakTimes = getListBreakTimeCache();
+                let lastBreakTime = listBreakTimes.at(-1);
+                if (lastBreakTime && !lastBreakTime.end){
+                  isPause = true;
+                }
+                
+                if (isPause){
+                  btnBreakTime.hide();
+                  btnStopBreakTime.show();
+                  breakTimerContainer.show();
+                }
+                else {
+                  btnBreakTime.show();
+                  btnStopBreakTime.hide();
+                  breakTimerContainer.hide();
+                }
+                
+                function onWork(){
+                  iconStatus.css('color', '#4ea72e');
+                  textStatus.text('作業中');
+                  let listBreakTimes = getListBreakTimeCache();
+                  const durations = listBreakTimes.map((i, idx, arr) => moment.utc(moment(i.end || (idx === arr.length - 1 ? moment() : null)).diff(moment(i.start))).format("HH:mm:ss"));
+                  const startTime = localStorage.getItem(LOCALSTORAGE_CACHE_WORK_START_TIME);
+                  workTimer.text(getElapsedTimeFormatted(startTime, durations));
+                  
+                }
+            
+                onWork();
+                setInterval(() => {
+                  if (!isPause){
+                    onWork();  
+                  }
+                  
+                }, 1000);
+                
+                setInterval(() => {
+                  if (isPause){
+                    iconStatus.css('color', '#ffc000');
+                    textStatus.text('休憩中');
+                    let listBreakTimes = getListBreakTimeCache();
+                    let lastBreakTime = listBreakTimes.at(-1);
+                    if (!lastBreakTime){
+                      lastBreakTime = {start: moment().format('YYYY-MM-DD HH:mm:ss'), end: ''};
+                      localStorage.setItem(LOCALSTORAGE_CACHE_BREAK_TIME, JSON.stringify());
+                      listBreakTimes = [lastBreakTime];
+                    }
+                    else if (lastBreakTime?.end){
+                       lastBreakTime = {start: moment().format('YYYY-MM-DD HH:mm:ss'), end: ''};
+                       listBreakTimes.push(lastBreakTime);
+                    }
+                    const startTime = lastBreakTime.start;
+                    localStorage.setItem(LOCALSTORAGE_CACHE_BREAK_TIME, JSON.stringify(listBreakTimes));
+                    breakTimer.text(getElapsedTimeFormatted(startTime, []));
+                  }
+                }, 1000);
+                
+                
+                
+                btnStop.on('click', function(){
+                  btnStopBreakTime.click();
+                  modalConfirm(CONFIRM_STOP_EVENT, (result) => {
+                    if (result) {
+                      stopEvent(event)
+                    }
+                  })
+                });
+                let breakTimeInterval;
+                btnBreakTime.on('click',  async function(){
+                  breakTimerContainer.show();
+                  btnStopBreakTime.show();
+                  btnBreakTime.hide();
+                  isPause = true;
+                }); 
+                btnStopBreakTime.on('click', async function(){
+                  breakTimerContainer.hide();
+                  btnStopBreakTime.hide();
+                  btnBreakTime.show();
+                  
+                  
+                  let listBreakTimes = getListBreakTimeCache();
+                  let lastBreakTime = listBreakTimes.at(-1);
+                  if (lastBreakTime?.start && !lastBreakTime?.end){
+                    lastBreakTime.end = moment().format('YYYY-MM-DD HH:mm:ss');
+                  }
+                  localStorage.setItem(LOCALSTORAGE_CACHE_BREAK_TIME, JSON.stringify(listBreakTimes));
+                  
+                  isPause = false;
+                })
+              }
+              else if (event[WORK_STATUS].value == WORK_STATUS_NOT_START){
+                alert(ALERT_CANNOT_DO_MULTIPLE_JOBS);
+              }
+            }
+            detailEventContainer.append(buttonControlContainer);
+            let actualWorkContainer = $('<div class="mt-5 p-3" style="border: 1px solid #ccc; position: relative; min-height: 60px"></div>');
+            if (event[WORK_STATUS].value == WORK_STATUS_COMPLETED || event[WORK_STATUS].value == WORK_STATUS_ABNORMAL) {
+              detailEventContainer.append(actualWorkContainer);
+              let btnEditEvent;
+              if ([
+                "CASE_COMPLETED_OWNER_CREATOR_FULLEDIT", 
+                "CASE_COMPLETED_OWNER_ADMINCREATED_LIMITEDEDIT", 
+                "CASE_ABNORMAL_NOTSTARTED_ASSIGNED_ADMINCREATED_EDITACTUAL", 
+                "CASE_ABNORMAL_STARTED_OWNERCREATOR_FULLEDIT", 
+                "CASE_ABNORMAL_STARTED_OWNER_ADMINCREATED_LIMITEDEDIT"
+              ].includes(userPermission)){
+                btnEditEvent = $(`<button class="btn btn-lg btn-outline-secondary" style="position: absolute; right: 10px; top: 10px">修正</button>`);
+              }
+              actualWorkContainer.append(
+                btnEditEvent,
+                `<div>  
+                  <div><b>実績報告</b></div>
+                  <div>作業日 : ${event[ACTUAL_DATE_FIELD_CODE].value}</div>
+                  <div>実際作業者 : ${event[ACTUAL_EMAIL_FIELD_CODE].value}</div>
+                  <div>開始 : ${event[ACTUAL_START_DATE_TIME_FIELD_CODE].value || ""}</div>
+                  <div>終了 : ${event[ACTUAL_END_DATE_TIME_FIELD_CODE].value || ""}</div> 
+                  <div>作業時間 : ${event[ACTUAL_END_DATE_TIME_FIELD_CODE].value ? event[TIME_SPENT_FIELD_CODE].value : ""}</div> 
+                  <div>休憩時間 : ${event[TOTAL_BREAK_TIME_FIELD_CODE].value ? HHmmToMinutes(event[TOTAL_BREAK_TIME_FIELD_CODE].value) + "分" : ""}</div>
+                  <div>圃場 : ${event[FIELD_FIELD_CODE].value}</div>
+                  <div>実績（列数）: ${+event[ACTUAL_COLUMN_FIELD_CODE].value} / ${+event[TOTAL_COLUMNS_FIELD_CODE].value}</div>
+                  <div>
+                    区画 : ${event[SECTION_FIELD_CODE].value} 
+                    
+                    ${
+                      event[SECTION_OR_COLUMN_FIELD_CODE].value == COLUMN_OPTION_VALUE 
+                      ? 
+                      `
+                        <table border="1" style="width: 100%; border-color: #ccc">
+                        <thead>
+                          <tr>
+                            <th style="padding: 5px">列名</th>
+                            <th style="padding: 5px">列作業時間</th>
+                            <th style="padding: 5px">実績（％）</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${
+                            event[DETAIL_LIST_COLUMN_OF_SECTION_FIELD_CODE].value
+                            .filter(o => o.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]?.value)
+                            .map(o => `<tr>
+                                <td style="padding: 5px">${o?.value[COLUMN_NAME_OF_DETAIL_LIST_FIELD_CODE]?.value || ""}</td>
+                                <td style="padding: 5px">${o?.value[TIME_SPENT_OF_DETAIL_LIST_FIELD_CODE]?.value || ""}</td>
+                                <td style="padding: 5px">${o?.value[COLUMN_PERCENT_OF_DETAIL_LIST_FIELD_CODE]?.value || ""}</td>
+                              </tr>`
+                            ).join('')
+                          }
+                        </tbody>
+                      </table>
+  
+                      `
+                      : 
+                      `
+                      `  
+                    }
+                  </div>
+                </div>
+              `)
+              if (btnEditEvent) btnEditEvent.on('click', () => {
+                let editPermission = "LIMITEDIT";
+                if (userPermission == "CASE_COMPLETED_OWNER_CREATOR_FULLEDIT" || userPermission == "CASE_ABNORMAL_STARTED_OWNERCREATOR_FULLEDIT"){
+                  editPermission = "FULLEDIT"
+                }
+                showModalAddAndEditEvent(OPTION_ADD_EVENT_REGISTER_COMPLETED, event, "EDIT", editPermission);
+              });
+            }
+            loadingModal.hide();
+          });
+          $('#detail-event').show();  
+        })
+      }
+      
+      $('#detail-event-back').on('click', hideDetailEvent);
+      btnReturnHome.on('click', hideDetailEvent);
+      
+      async function searchPlanWork({userSearch, startDate, endDate, workStatus, mode = "ALL"}){
+        try {
+          const startDateTime = moment(startDate).set({ hour: 0, minute: 0, second: 0 });
+          const endDateTime = moment(endDate).set({ hour: 23, minute: 59, second: 59 });
+          let postData = {
+            userSearch, 
+            planStartDateTime: startDateTime, 
+            planEndDateTime: endDateTime, 
+            workStatus: workStatus
+          }
+          if (mode == "ACTUAL"){
+            postData = {
+              userActualSearch: userSearch, 
+              actualStartDateTime: startDateTime, 
+              actualEndDateTime: endDateTime, 
+              workStatus: workStatus
+            }
+          }
+          let result = await workService.getListWorks(postData);
+          result.sort((a, b) => {
+            const tmpA = a[PLAN_START_DATE_TIME_FIELD_CODE].value;
+            const timeA = moment(a[PLAN_DATE_FIELD_CODE].value);
+            timeA.set({ hour: tmpA[0], minute: tmpA[1] });
+            
+            const tmpB = b[PLAN_START_DATE_TIME_FIELD_CODE].value;
+            const timeB = moment(b[PLAN_DATE_FIELD_CODE].value);
+            timeB.set({ hour: tmpB[0], minute: tmpB[1] });
+            
+            return timeA.diff(timeB);
+          });
+          console.log('result', result);
+          // filter unassigned
+          result = result.filter(o => o[EMAIL_FIELD_CODE].value);
+          return result;
+        }
+        catch (e) {
+          console.error(e);
+        }
+      }
+      function HHmmToHours(HHmm, fixed = 1){
+        let negative = HHmm.includes('-') ? -1 : 1;
+        let tmp = HHmm.split(':').map(o => Math.abs(+o));
+        return negative * ((tmp[0] + tmp[1] / 60).toFixed(fixed)); 
+      }
+      function HHmmToMinutes(HHmm){
+        let negative = HHmm.includes('-') ? -1 : 1;
+        let tmp = HHmm.split(':').map(o => Math.abs(+o));
+        return negative * (tmp[0] * 60 + tmp[1]); 
+      }
+      async function updateCountNotCompletedEvent(){
+        const resultList = await workService.getListWorks({
+          userSearch: kintoneLoginUser['社員コード'].value,
+          workStatus: [WORK_STATUS_NOT_START, WORK_STATUS_PROCESSING, WORK_STATUS_ABNORMAL]
+        });
+        const recordCount = resultList.length;
+        $('#searchAllExceptCompleted').text(`全体の残る作業(${recordCount})`);
+      }
+      function countWorkAndHourCompleted(events){
+        let countWorkCompleted = 0;
+        let totalHours = 0;
+        for (const event of events){
+          if (event[WORK_STATUS].value == WORK_STATUS_COMPLETED){
+            countWorkCompleted++;
+            totalHours += HHmmToHours(event[TIME_SPENT_FIELD_CODE].value, 1);
+          }
+          
+        }
+        $('#work-result-content').text(countWorkCompleted + '/' + events.length);
+        $('#time-spent-result-content').text(totalHours.toFixed(1));
+        
+      }
+      function redirectToProcessingEvent(events){
+        if (events && events.length > 0)
+        showDetailEvent(events[0]['$id'].value)
+      }
+      function renderPlanWork(events, type = 'INIT') {
+        const workStatusFilter = [];
+        if ($("#workStatusNotStart").prop("checked")) workStatusFilter.push(WORK_STATUS_NOT_START);
+        if ($("#workStatusProcessing").prop("checked")) workStatusFilter.push(WORK_STATUS_PROCESSING);
+        if ($("#workStatusAbnormal").prop("checked")) workStatusFilter.push(WORK_STATUS_ABNORMAL);
+        if ($("#workStatusCompleted").prop("checked")) workStatusFilter.push(WORK_STATUS_COMPLETED);
+        
+        $('#list-event-item').empty();
+        if (events.filter(event => workStatusFilter.includes(event[WORK_STATUS].value)).length == 0){
+          $('#list-event-item-error').text(NO_RESULTS_EVENT_FOUND);
+        }
+        else {
+          $('#list-event-item-error').text('');
+        }
+        
+        const startDateFilter = $("#startDateFilter").val();
+        const endDateFilter = $("#endDateFilter").val();
+        let htmlDateFilterContent = '<i class="fa fa-calendar mr-2" style="color:green;font-size: 18px;"></i>'
+        if (startDateFilter == endDateFilter){
+          if (moment().format('YYYY-MM-DD') == startDateFilter){
+            htmlDateFilterContent += `<span>作業の進捗 ${startDateFilter}（${FILTER_TODAY}）</span>`;
+          }
+          else {
+            htmlDateFilterContent += `<span>作業の進捗 ${startDateFilter}</span>`;
+          }
+        }
+        else {
+          htmlDateFilterContent += `<span>作業の進捗 ${moment(startDateFilter).format("MM-DD")} ~ ${moment(endDateFilter).format("MM-DD")}</span>`;
+          
+        }
+        $("#dateFilterContent").empty();
+        $("#dateFilterContent").append(htmlDateFilterContent)
+        
+        
+        for (const event of events){
+          const workStatus = event[WORK_STATUS].value; 
+          let colorWorkStatus = BG_COLOR_EVENT_NOT_START;
+          if (workStatus == WORK_STATUS_PROCESSING){
+            colorWorkStatus = BG_COLOR_EVENT_PROCESSING;
+          }
+          else if (workStatus == WORK_STATUS_COMPLETED){
+            colorWorkStatus = BG_COLOR_EVENT_COMPLETED;
+            
+            
+            
+          }
+          else if (workStatus == WORK_STATUS_ABNORMAL){
+            colorWorkStatus = BG_COLOR_EVENT_ABNORMAL;
+          }
+          if (workStatusFilter.includes(workStatus)){
+            const searchMode = $(`input[name="searchMode"]`).val();
+            const eventItemElm = $(`
+              <div class="list-group-item list-group-item-action mb-3" style="border: 1px solid #ccc; background-color: ${colorWorkStatus}">
+                
+                <div class="d-flex justify-content-between">
+                  <b>${searchMode == "全体" ? event[PLAN_DATE_FIELD_CODE].value : event[ACTUAL_DATE_FIELD_CODE].value}</b>
+                  <b>${workStatus}</b>
+                </div>
+                <div>作業者 : 
+                  
+                  ${
+                    searchMode == "全体" 
+                    ? 
+                    `${event['メールアドレス'].value}`
+                    : 
+                    `${event['実際_メールアドレス'].value}`
+                  }
+                  
+                  
+                </div>
+                <div>開始 ~ 終了 : 
+                  
+                  ${
+                    searchMode == "全体" 
+                    ? 
+                    `${event[PLAN_START_DATE_TIME_FIELD_CODE].value} ~ ${event[PLAN_END_DATE_TIME_FIELD_CODE].value}`
+                    : 
+                    `${event[ACTUAL_START_DATE_TIME_FIELD_CODE].value} ~ ${event[ACTUAL_PLAN_END_DATE_TIME_FIELD_CODE].value}`
+                  }
+                  
+                  
+                </div>
+                <div>作業名 : ${event[WORK_NAME_FIELD_CODE].value}</div>
+                <div>圃場 : ${event[FIELD_FIELD_CODE].value}</div>
+                <div>区画 : ${event[SECTION_FIELD_CODE].value}</div>
+              </div>
+            `);
+            
+            
+            $('#list-event-item').append(eventItemElm);
+            setTimeout(() => {
+              eventItemElm.on('click', () => showDetailEvent(event['$id'].value)); 
+            }, 1000);
+          }
+        }
+        
+        loadingModal.hide();
+      }
+      let userChoices;
+      MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.afterSyncSharepointToKintone().then(() => {
+        userMasterService.getListUsers().then(async (result) => {
+          loadingModal.show();
+          listUsers = result;
+          kintoneLoginUser = listUsers.find(o => o['ユーザーの選択'].value?.[0]?.code == USER_LOGIN.code);
+          
+          userChoices = new Choices($('#selectUsers')[0], {
+            removeItemButton: true,
+            placeholder: true,
+            placeholderValue: 'ユーザーを選択してください',
+            noResultsText: '結果が見つかりません',
+            noChoicesText: '選択肢がありません',
+            itemSelectText: '',
+            shouldSort: false
+          });
+          console.log('listUsers', listUsers);
+          const listUserOptions = listUsers.map(o => {
+            return {
+              value: o['社員コード'].value, 
+              label: o['氏名'].value
+            }
+          })
+          userChoices.setChoices(listUserOptions, 'value', 'label', true);
+          userChoices.setChoiceByValue(kintoneLoginUser['社員コード'].value);
+          
+          // go to detail event from notification
+          const notiRecordId = localStorage.getItem('noti_record_id');
+          if (notiRecordId) localStorage.removeItem('noti_record_id');
+          if (notiRecordId) {
+            showDetailEvent(notiRecordId);
+            return;
+          }
+          const today = moment();
+          $('#startDate').val(today.format('YYYY-MM-DD'));
+          $('#endDate').val(today.format('YYYY-MM-DD'));
+          
+          // search plan work in today
+          searchPlanWork({userSearch: kintoneLoginUser['社員コード'].value, startDateTime: today, endDate: today}).then((events) => {
+            if (events){
+              renderPlanWork(events, 'INIT');
+              searchPlanWork({userSearch: kintoneLoginUser['社員コード'].value, startDateTime: today, endDate: today, workStatus: [WORK_STATUS_PROCESSING], mode: "ACTUAL"}).then((events) => {
+                redirectToProcessingEvent(events)
+              })
+              countWorkAndHourCompleted(events);
+            }
+          });
+          
+          const yesterday = moment().subtract(1, 'days').endOf('day');
+          // check abnormal work
+          workService.getListWorks({userSearch: kintoneLoginUser['社員コード'].value, planEndDateTime: yesterday, workStatus: [WORK_STATUS_NOT_START, WORK_STATUS_PROCESSING, WORK_STATUS_ABNORMAL]}).then((events) => {
+            updateStatusAbnormalEvent(events);
+            notiAbnormalEvent(events);
+          })
+          
+          updateCountNotCompletedEvent();
+        
+        });
+      })
+      
+      $('#search').on('click', function(){
+        $('[class$="-error"]').empty();
+        loadingModal.show();
+        let startDateFilter = $('#startDateFilter').val();
+        const allUsersToggle = $('#allUsersToggle').prop('checked');
+        let userSearch = userChoices.getValue(true);
+        let validate = true;
+        
+        if (!startDateFilter){
+          $('.startDateFilter-error').text(REQUIRED);
+          validate = false;
+          
+        }
+        
+        if (allUsersToggle) {
+          userSearch = undefined;
+          $("#endDateFilter").val(startDateFilter);
+        }
+        else {
+          if (userSearch.length == 0){
+            userSearch = "NO_ONE"
+          }
+        }
+        
+        let endDateFilter = $('#endDateFilter').val();
+        
+        if (!endDateFilter){
+          $('.endDateFilter-error').text(REQUIRED);
+          validate = false;
+        }
+        
+        if (moment(startDateFilter).isAfter(moment(endDateFilter))) {
+          $('.startDateFilter-error').text(START_DATE_MUST_LESS_THAN_END_DATE);
+          validate = false;
+        }
+        
+        const workStatusFilter = [];
+        if ($("#workStatusNotStart").prop("checked")) workStatusFilter.push(WORK_STATUS_NOT_START);
+        if ($("#workStatusProcessing").prop("checked")) workStatusFilter.push(WORK_STATUS_PROCESSING);
+        if ($("#workStatusAbnormal").prop("checked")) workStatusFilter.push(WORK_STATUS_ABNORMAL);
+        if ($("#workStatusCompleted").prop("checked")) workStatusFilter.push(WORK_STATUS_COMPLETED);
+        
+        if (workStatusFilter.length == 0){
+          $('.control-filter-work-status-error').text(MUST_SELECT_AT_LAEST_ONE);
+          validate = false;
+        }
+        
+        if (!validate){
+          loadingModal.hide();
+          return;
+        }
+        
+        
+
+        //kintoneLoginUser['社員コード'].value;
+        
+        console.log('userSearch', userSearch);
+        searchPlanWork({userSearch, startDate: startDateFilter, endDate: endDateFilter}).then((events) => {
+          if (events){
+            renderPlanWork(events, 'SEARCH');
+          }
+        });
+        
+        searchPlanWork({userSearch: kintoneLoginUser['社員コード'].value, startDate: startDateFilter, endDate: endDateFilter}).then((events) => {
+          if (events){
+            countWorkAndHourCompleted(events);
+          }
+        });
+        
+      })
+      $('#startDateFilter').datepicker({
+        format: 'yyyy-mm-dd',
+        language: "ja",
+        todayHighlight: true,
+        autoclose: true,
+      }).on("changeDate", function (e) {
+        const date = e.date;
+         $('#agoFilter').val('カスタム');
+      });
+      $('#endDateFilter').datepicker({
+        format: 'yyyy-mm-dd',
+        language: "ja",
+        todayHighlight: true,
+        autoclose: true,
+      }).on("changeDate", function (e) {
+        // const date = e.date;
+         $('#agoFilter').val('カスタム');
+      });
+      $('#startDate').datepicker('setDate', moment().format('YYYY-MM-DD'));
+      $('#endDate').datepicker('setDate', moment().format('YYYY-MM-DD'));
+      
+      $("#agoFilter").change(function(){
+        const agoFilter = $(this).val();
+        if (agoFilter == FILTER_TODAY){
+          const today = moment();
+          $("#startDateFilter").val(today.format('YYYY-MM-DD'));
+          $("#endDateFilter").val(today.format('YYYY-MM-DD'));
+        }
+        if (agoFilter === FILTER_TOMORROW) {
+          const tomorrow = moment().add(1, 'days');
+          $("#startDateFilter").val(tomorrow.format('YYYY-MM-DD'));
+          $("#endDateFilter").val(tomorrow.format('YYYY-MM-DD'));
+        }
+        else if (agoFilter == FILTER_YESTERDAY){
+          const yesterday = moment().subtract(1, 'days');
+          $("#startDateFilter").val(yesterday.format('YYYY-MM-DD'));
+          $("#endDateFilter").val(yesterday.format('YYYY-MM-DD'));
+        }
+        if (agoFilter === FILTER_AFTER_7_DAYS) {
+          const start = moment().add(1, 'days');
+          const end = moment().add(7, 'days');
+          $("#startDateFilter").val(start.format('YYYY-MM-DD'));
+          $("#endDateFilter").val(end.format('YYYY-MM-DD'));
+        }
+        else if (agoFilter === FILTER_BEFORE_7_DAYS) {
+          const sevenDaysAgo = moment().subtract(7, 'days');
+          const yesterday = moment().subtract(1, 'days');
+          $("#startDateFilter").val(sevenDaysAgo.format('YYYY-MM-DD'));
+          $("#endDateFilter").val(yesterday.format('YYYY-MM-DD'));
+        }
+        else if (agoFilter == FILTER_BEFORE_30_DAYS){
+          const thirtyDaysAgo = moment().subtract(30, 'days');
+          const yesterday = moment().subtract(1, 'days');
+          $("#startDateFilter").val(thirtyDaysAgo.format('YYYY-MM-DD'));
+          $("#endDateFilter").val(yesterday.format('YYYY-MM-DD'));
+        }
+        else if (agoFilter == FILTER_CUSTOM_DATE){
+          $("#startDateFilter").val(undefined);
+          $("#endDateFilter").val(undefined);
+        }
+      });
+      $("#agoFilter").trigger('change');
+      $('#clearSearch').on('click', function(){
+        $('#agoFilter').val(FILTER_TODAY);
+        $('#agoFilter').trigger('change');
+        $("#workStatusNotStart").prop("checked", true) 
+        $("#workStatusProcessing").prop("checked", true) 
+        $("#workStatusAbnormal").prop("checked", true) 
+        $("#workStatusCompleted").prop("checked", true)
+        $(`input[name="searchMode"][value="全体"]`).prop("checked", true).trigger('change');
+        $("#search").click();
+      })
+      $(document).on('click', 'button', function() {
+        const button = $(this);
+        button.prop('disabled', true);
+        setTimeout(function() {
+            button.prop('disabled', false);
+        }, 500);
+      });
+      $('#searchAllExceptCompleted').on('click', function(){
+        loadingModal.show(); 
+        const userSearch = kintoneLoginUser['社員コード'].value;
+          workService.getListWorks({
+          userSearch: userSearch,
+          workStatus: [WORK_STATUS_NOT_START,  WORK_STATUS_PROCESSING,WORK_STATUS_ABNORMAL]  
+          }).then((events) => {
+            if (events) {
+             renderPlanWork(events, 'GET_ALL_EXCEPT');
+           }
+           loadingModal.hide();
+         });
+      });
+      
+      
+      btnAddNewEvent.on('click', function(){
+        modalAddEvent((option) => {
+          if (!option) return;
+          showModalAddAndEditEvent(option);
+        });
+      })
+      
+      $('#allUsersToggle').on('change', function(){
+        const allUsersToggle = $(this).prop('checked');
+        console.log('allUsersToggle', allUsersToggle);
+        if (allUsersToggle){
+          $('#endDateFilterContainer').hide();
+          $('#startDateFilterContainer').removeClass('w-50').addClass('w-100');
+          userChoices?.disable();
+          $("#agoFilter").empty();
+          const arrOptions = [FILTER_TODAY, FILTER_TOMORROW, FILTER_YESTERDAY, FILTER_CUSTOM_DATE];
+          for (const item of arrOptions){
+            $("#agoFilter").append(`<option value=${item}>${item}</option>`)
+          }
+          $('label[for="startDateFilter"]').text("日付")
+        }
+        else {
+          $('#endDateFilterContainer').show();
+          $('#startDateFilterContainer').removeClass('w-100').addClass('w-50');
+          userChoices?.enable();
+          $("#agoFilter").empty();
+          const arrOptions = [FILTER_TODAY, FILTER_TOMORROW, FILTER_YESTERDAY, FILTER_AFTER_7_DAYS, FILTER_BEFORE_7_DAYS, FILTER_BEFORE_30_DAYS, FILTER_CUSTOM_DATE];
+          for (const item of arrOptions){
+            $("#agoFilter").append(`<option value=${item}>${item}</option>`)
+          }
+          $('label[for="startDateFilter"]').text("開始日")
+        }
+      });
+      
+      
+      $('input[name="searchMode"]').on('change', function () {
+        const selectedMode = $(this).val();
+        console.log('Selected mode:', selectedMode);
+      
+        
+        if (selectedMode === '全体') {
+          $('#workStatusNotStart').prop('checked', true);
+          $('#workStatusProcessing').prop('checked', true);
+          $('#workStatusAbnormal').prop('checked', true);
+          $('#workStatusCompleted').prop('checked', true);
+        } else if (selectedMode === '実績') {
+          $('#workStatusNotStart').prop('checked', false);
+          $('#workStatusProcessing').prop('checked', false);
+          $('#workStatusAbnormal').prop('checked', false);
+          $('#workStatusCompleted').prop('checked', true);
+        }
+      });
+      
+      // fix z-index modal
+      $(document).on('shown.bs.modal', function (e) {
+        const backdrops = $('.modal-backdrop');
+        const modals = $('.modal.show');
+      
+        backdrops.each(function (index) {
+          $(this).css({
+            'z-index': 1040 + index * 20
+          });
+        });
+      
+        modals.each(function (index) {
+          $(this).css('z-index', 1050 + index * 20);
+        });
+    });
+
+    }
+    catch (e){
+      alert(e.message);
+    }
+  });
+})(jQuery);

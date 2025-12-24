@@ -1,0 +1,8 @@
+(($) => {
+  const MESSAGE_HIDE_FEATURE = 'この機能はブラウザ版のみ対応しています。';
+  kintone.events.on('mobile.app.record.index.show', (event) => {
+    $('main.gaia-mobile-v2-viewpanel-contents .gaia-mobile-v2-indexviewpanel-contents-inner').empty();
+    $('main.gaia-mobile-v2-viewpanel-contents .gaia-mobile-v2-indexviewpanel-contents-inner').append(`<div style="font-size: 18px; padding: 10px">${MESSAGE_HIDE_FEATURE}</div>`)
+    $('footer.gaia-mobile-v2-viewpanel-footer').remove();
+  });
+})(jQuery);

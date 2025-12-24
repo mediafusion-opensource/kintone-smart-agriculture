@@ -1,0 +1,45 @@
+(() => {
+  'use strict';
+  window.MF_AGRI_COST_BY_CROPPING_LANGUAGES = {
+    'ja': {
+      'CANCEL': 'キャンセル',
+      'SAVE': '保存',
+      'CLIENT_ID_AND_CLIENT_SECRET_DES': '※freee人事労務に認証のため、 ClientIDとClientSecretを使用する。',
+      'UPDATE_AUTHENTICATION': '認証を設定',
+      'REQUIRED': '必須です。',
+      'CALC': '計算',
+      'CALCULATING': '計算中。 。 。',
+      'KINTONE_ERROR_500': 'Error 500: kintone サーバー側にエラーが発生しました。',
+      'FREEE_ERROR_500': 'Error 500: freee人事労務 サーバー側にエラーが発生しました。',
+      'GET_EMPLOYEE_ERROR_400': 'Error 400: freee人事労務で従業員データを取得にエラーが発生しました。',
+      'GET_EMPLOYEE_ERROR_404': 'Error 404: 従業員はfreee人事労務上には存在しません。',
+      'GET_SALARY_ERROR_400': 'Error 400: 従業員の給与データの取得にエラーが発生しました。',
+      'GET_SALARY_ERROR_404': 'Error 404: 従業員の給与データは存在しません。',
+      'GET_BONUS_ERROR_400': 'Error 400: 従業員の賞与データの取得にエラーが発生しました。',
+      'GET_BONUS_ERROR_404': 'Error 404: 従業員の賞与データは存在しません。',
+      'GET_TIMESHEET_ERROR_400': 'Error 400: kintoneで従業員の勤怠データを取得にエラーが発生しました。',
+      'GET_TIMESHEET_ERROR_403': 'Error 403: 勤怠データにアクセス禁止。',
+      'TIMESHEET_NOT_EXIST': '勤怠データが存在しません。'
+    },
+    'en': {
+      'CANCEL': 'Cancel',
+      'SAVE': 'Save',
+      'CLIENT_ID_AND_CLIENT_SECRET_DES': '※Use ClientID and ClientSecret to authenticate freee人事労務.',
+      'UPDATE_AUTHENTICATION': 'Configure authentication',
+      'REQUIRED': 'Required',
+      'CALC': 'Calculate',
+      'CALCULATING': 'Calculating. . .',
+      'KINTONE_ERROR_500': '(Error 500) The kintone server encountered an error.',
+      'FREEE_ERROR_500': '(Error 500) The freee人事労務 server encountered an error.',
+      'GET_EMPLOYEE_ERROR_400': '(Error 400) An error occurred while fetching employee data on freee人事労務.',
+      'GET_EMPLOYEE_ERROR_404': '(Error 404) This employee does not exist on  freee人事労務. ',
+      'GET_SALARY_ERROR_400': '(Error 400) An error occurred while retrieving employee salary data.',
+      'GET_SALARY_ERROR_404': `(Error 404) The employee's salary data does not exist.`,
+      'GET_BONUS_ERROR_400': '(Error 400) An error occurred while retrieving employee bonus data.',
+      'GET_BONUS_ERROR_404': `(Error 404) The employee's bonus data does not exist.`,
+      'GET_TIMESHEET_ERROR_400': '(Error 400) An error occurred while retrieving employee attendance data on kintone.',
+      'GET_TIMESHEET_ERROR_403': '(Error 403) Do not have permission to access the attendance data.',
+      'TIMESHEET_NOT_EXIST': 'Attendance data does not exist.'
+    }
+  }
+})();

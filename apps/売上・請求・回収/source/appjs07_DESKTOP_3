@@ -1,0 +1,461 @@
+jQuery.noConflict();
+
+
+(async function($, PLUGIN_ID) {
+    "use strict";
+    
+    const appId = kintone.app.getId()
+
+    const TAX_INCLUSIVE = '内税'
+    const TAX_EXCLUSIVE = '外税'
+
+    const ROUND_UP = '切り上げ'
+    const ROUND_DOWN = '切り捨て'
+    const ROUND_NEAREST = '四捨五入'
+    let roundType = ROUND_NEAREST
+
+    const FIELD_SUB_TABLE = '商品リスト'
+    const FIELD_CONSUMPTION_TAX = '消費税'
+    const FIELD_AMOUNT = '金額'
+    const FIELD_SUB_TOTAL = '小計'
+    const FIELD_CONSUMPTION_TAX_TOTAL = '消費税合計'
+    const FIELD_TOTAL = '合計'
+
+    const FIELD_ROUND_TYPE = '端数処理区分'
+    const FIELD_QUANTITY = '数量'
+    const FIELD_UNIT_PRICE = '単価'
+    const FIELD_TAX_TYPE = '課税'
+    const FIELD_TAX_RATE = '税率'
+    const FIELD_STANDARD_PRICE= '標準価格'
+    
+    const FIELD_FREEE_TAX_RATE = 'freee_税率'
+    const FREEE_TAX_RATE_10 = '10%'
+    const FREEE_TAX_RATE_8 = '8%'
+    const FREEE_TAX_RATE_8_SPECIAL = '8%（軽減税率）'
+    const FREEE_TAX_RATE_0 = '0%'
+
+    let products = []
+    let prices = []
+    const FIELD_SALE = '販売先'
+    const FIELD_PRODUCT_NAME = '商品名'
+    const FIELD_PRODUCT_CODE = '商品'
+    const APP_NAME_PRODUCT = '商品マスター管理'
+    const SUB_TABLE_PRICE = '販売先別価格'
+    const FIELD_SALE_CODE = '販売先コード'
+    const FIELD_SALE_PRICE = '販売価格'
+    const APP_PRODUCT_FIELD_PRODUCT_CODE = '商品コード'
+
+    const FIELD_QUOTATION_NUMBER = '見積番号'
+    const FIELD_STATUS = 'ステータス'
+    const STATUS_ORDERED = '受注済'
+    const APP_NAME_QUOTATION = '見積管理'
+    
+    const fieldCodes = [FIELD_ROUND_TYPE, FIELD_QUANTITY, FIELD_UNIT_PRICE, FIELD_TAX_TYPE, FIELD_TAX_RATE]
+    let editFieldEvents = []
+    fieldCodes.forEach(fieldCode => {
+        editFieldEvents.push('app.record.edit.change.' + fieldCode)
+        editFieldEvents.push('app.record.create.change.' + fieldCode)
+    })
+    
+    const MESSAGES = {
+      'ja': {
+        'ERROR_DUPLICATED': '値が既に存在します。',
+      },
+      'en': {
+        'ERROR_DUPLICATED': 'The value already exists.'
+      }
+    }
+    const language = kintone.getLoginUser().language || 'en';
+    const locales = MESSAGES[language];
+    const FORM_DATA = cybozu.data.page['FORM_DATA'];
+    const ELEMENT_FIELD_ID = {};
+    const fieldList = FORM_DATA.schema.table.fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+    for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+      ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+      const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+      for (const fieldId of Object.keys(fieldList)) {
+        ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+      }
+    }
+
+    // Event on Edit field in App or Edit fields in Subtable
+    kintone.events.on(editFieldEvents, (event) => {
+        // alert('editFieldEvents')
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        roundType = event.record[FIELD_ROUND_TYPE].value ? event.record[FIELD_ROUND_TYPE].value : ROUND_NEAREST
+
+        if (event.changes.row && event.changes.row.id) {    // change field of subtable
+            // Calculate this row
+            calculateData(
+                subTableRows.find(row => row.id == event.changes.row.id), 
+                event.changes.row.value[FIELD_QUANTITY].value, 
+                event.changes.row.value[FIELD_UNIT_PRICE].value, 
+                event.changes.row.value[FIELD_TAX_TYPE].value, 
+                event.changes.row.value[FIELD_TAX_RATE].value)
+        } else { // change field of App
+            // Calculate all rows in subtable
+            subTableRows.forEach(row => {
+                calculateData(row, 
+                    row.value[FIELD_QUANTITY].value, 
+                    row.value[FIELD_UNIT_PRICE].value, 
+                    row.value[FIELD_TAX_TYPE].value, 
+                    row.value[FIELD_TAX_RATE].value)
+            })
+        }
+
+        // Calculate subTotal, consumptionTaxTotal, total
+        calculateApp(event, subTableRows)
+
+        return event
+    });
+    
+    // Auto lookup kintone
+    kintone.events.on(['app.record.create.show'], (event) => {
+        const record = event.record;
+    
+        const subTableRows = record[FIELD_SUB_TABLE].value;  
+        subTableRows.forEach((row, index) => {
+            const productField = row.value['商品'];  
+    
+            if (productField && productField.value) {
+                const lookupButton = $(`.subtable-row-gaia`).eq(index).find('button.input-lookup-gaia');
+                if (lookupButton.length) {
+                    lookupButton.click();
+                }
+            }
+        });
+    
+
+        const hanbaikodoFieldId = ELEMENT_FIELD_ID[FIELD_SALE_CODE];
+        const nohinbanFieldId = ELEMENT_FIELD_ID[FIELD_QUOTATION_NUMBER];
+    
+        if (record[FIELD_SALE_CODE] && record[FIELD_SALE_CODE].value) {
+            const hanbaikodoLookupButton = $(`.field-${hanbaikodoFieldId}`).find('button.input-lookup-gaia');
+            if (hanbaikodoLookupButton.length) {
+                hanbaikodoLookupButton.click();
+            }
+        }
+    
+        if (record[FIELD_QUOTATION_NUMBER] && record[FIELD_QUOTATION_NUMBER].value) {
+            const nohinbanLookupButton = $(`.field-${nohinbanFieldId}`).find('button.input-lookup-gaia');
+            if (nohinbanLookupButton.length) {
+                nohinbanLookupButton.click();
+            }
+        }
+    
+        return event;
+    });
+
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      MF_LOOKUP_SUBTABLE.lookupSucceed = () => {
+        $('button.input-lookup-gaia').click();
+      }
+    });
+    
+    // Disable calculate fields
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+        'app.record.create.change.' + FIELD_SUB_TABLE,
+        'app.record.edit.change.' + FIELD_SUB_TABLE,
+    ], (event) => {
+        // alert('Disable calculate fields')
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        roundType = event.record[FIELD_ROUND_TYPE].value ? event.record[FIELD_ROUND_TYPE].value : ROUND_NEAREST
+        
+        for (const row of subTableRows){
+          row.value[FIELD_CONSUMPTION_TAX].disabled = true
+          row.value[FIELD_AMOUNT].disabled = true 
+        }
+        event.record[FIELD_SUB_TOTAL].disabled = true
+        event.record[FIELD_CONSUMPTION_TAX_TOTAL].disabled = true
+        event.record[FIELD_TOTAL].disabled = true
+        return event
+    });
+    
+    // disable tax rate field
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+        'app.record.detail.show'
+    ], async (event) => {
+      const targetElement = $(`.subtable-${ELEMENT_FIELD_ID[FIELD_SUB_TABLE]} tbody`)[0];
+      const config = { childList: true, subtree: true };
+      const callback = function(mutationsList, observer) {
+          mutationsList.forEach(function(mutation) {
+            $(`.label-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).hide();
+            $(`.field-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).closest('td').hide();
+          });
+      };
+      const observer = new MutationObserver(callback);
+      observer.observe(targetElement, config);
+      $(`.label-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).hide();
+      $(`.field-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).closest('td').hide();
+      return event;
+    })
+    
+    kintone.events.on([
+      'app.record.create.show',
+      'app.record.edit.show',
+      `app.record.create.change.${FIELD_FREEE_TAX_RATE}`,
+      `app.record.edit.change.${FIELD_FREEE_TAX_RATE}`,
+      `app.record.create.change.${FIELD_SUB_TABLE}`,
+      `app.record.edit.change.${FIELD_SUB_TABLE}`,
+    ], (event) => {
+      const record = event.record;
+      for (const row of record[FIELD_SUB_TABLE].value){
+        
+        if (row.value[FIELD_FREEE_TAX_RATE].value == FREEE_TAX_RATE_10){
+          row.value[FIELD_TAX_RATE].value = 10;
+        }
+        else if (row.value[FIELD_FREEE_TAX_RATE].value == FREEE_TAX_RATE_8 || row.value[FIELD_FREEE_TAX_RATE].value == FREEE_TAX_RATE_8_SPECIAL){
+          row.value[FIELD_TAX_RATE].value = 8;
+        }
+        else row.value[FIELD_TAX_RATE].value = 0;
+      }
+      return event;
+    })
+
+    
+    
+    // Event on Create record, Edit record
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+    ], async (event) => {
+        // Get all product
+        const reqProduct = {
+            "app": PRODUCT_MASTER_MANAGEMENT_APP_ID,
+            "query": 'limit 500'
+        }
+        const respProduct = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', reqProduct)
+        products = respProduct.records
+        const subTableRows = event.record[FIELD_SUB_TABLE].value
+        const saleCode = event.record[FIELD_SALE_CODE].value
+
+        let i = 0
+        while(i < subTableRows.length) {
+            const row = subTableRows[i++]
+            let productCode = row.value[FIELD_PRODUCT_CODE].value
+            // No product -> Skips
+            if (!productCode) {
+                continue
+            }
+            // Find price in subtable
+            const product = products.find(o => o[APP_PRODUCT_FIELD_PRODUCT_CODE].value == productCode)
+            prices = product?.[SUB_TABLE_PRICE]?.value || [];
+            
+            const price = prices.find(o => o.value[FIELD_SALE_CODE].value == saleCode)
+            let unitPrice = price?.value?.[FIELD_SALE_PRICE]?.value || 0;
+
+            if (!unitPrice) {
+                unitPrice = product?.[FIELD_STANDARD_PRICE]?.value || 0
+            }
+
+            row.value[FIELD_UNIT_PRICE].value = unitPrice
+            calculateData(row, 
+                row.value[FIELD_QUANTITY].value, 
+                unitPrice,
+                row.value[FIELD_TAX_TYPE].value, 
+                row.value[FIELD_TAX_RATE].value
+            )
+        }
+        calculateApp(event, subTableRows)
+        return event
+    });
+    
+    // Event on Change Sale destination, Change Product
+    kintone.events.on([
+      'app.record.create.change.' + FIELD_SALE,
+      'app.record.edit.change.' + FIELD_SALE,
+      'app.record.create.change.' + FIELD_PRODUCT_NAME,
+      'app.record.edit.change.' + FIELD_PRODUCT_NAME,
+    ], (event) => {
+        // alert('Event on Change Sale destination, Change Product')
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        let saleCode = event.record[FIELD_SALE_CODE].value
+
+        if (!saleCode) {                                // Clear lookup Sale
+            subTableRows.forEach(row => {
+                row.value[FIELD_UNIT_PRICE].value = 0
+                row.value[FIELD_CONSUMPTION_TAX].value = 0
+                row.value[FIELD_AMOUNT].value = 0
+            })
+            calculateApp(event, subTableRows)
+            return event
+        } else if (!event.changes.field.value) {        // Clear lookup Product
+            let row = subTableRows.find(row => row.id == event.changes.row.id)
+            row.value[FIELD_UNIT_PRICE].value = 0
+            row.value[FIELD_CONSUMPTION_TAX].value = 0
+            row.value[FIELD_AMOUNT].value = 0
+            calculateApp(event, subTableRows)
+            return event
+        }
+
+        let i = 0
+        while(i < subTableRows.length) {
+            let row = subTableRows[i++]
+            let productCode = row.value[FIELD_PRODUCT_CODE].value
+            // No product -> Skips
+            if (!productCode) {
+                continue
+            }
+            
+            const product = products.find(o => o[APP_PRODUCT_FIELD_PRODUCT_CODE].value == productCode)
+            prices = product?.[SUB_TABLE_PRICE]?.value || [];
+            
+            const price = prices.find(o => o.value[FIELD_SALE_CODE].value == saleCode)
+            let unitPrice = price?.value?.[FIELD_SALE_PRICE]?.value || 0;
+
+            if (!unitPrice) {
+                unitPrice = product?.[FIELD_STANDARD_PRICE]?.value || 0
+            }
+            
+
+            row.value[FIELD_UNIT_PRICE].value = unitPrice
+            calculateData(row, 
+                row.value[FIELD_QUANTITY].value, 
+                unitPrice,
+                row.value[FIELD_TAX_TYPE].value, 
+                row.value[FIELD_TAX_RATE].value
+            )
+        }
+        calculateApp(event, subTableRows)
+        return event
+    });
+    
+    kintone.events.on([
+      'app.record.create.submit',
+      'app.record.edit.submit'
+    ], async (event) => {
+      const record = event.record;
+      $('.input-error-cybozu-customize').remove();
+      const table = record['商品リスト'].value;
+      const productList = [];
+      let check = true;
+      for (const [index, item] of table.entries()){
+        if (!productList.includes(item.value['商品'].value)){
+          productList.push(item.value['商品'].value)
+        }
+        else {
+          $(`.field-${ELEMENT_FIELD_ID['商品']}`).eq(index).append(`<div class="input-error-cybozu input-error-cybozu-customize">${locales['ERROR_DUPLICATED']}</div>`);
+          check = false;
+        }
+      }
+      if (!check) {
+        $('.input-error-cybozu-customize')[0].scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'   
+        });
+        return false;
+      }
+      return event;
+    });
+    
+    // clear value after duplicate record
+    kintone.events.on([
+      'app.record.create.show'
+    ], (event) => {
+      console.log('event', event);
+      const reuse = event.reuse;
+      const record = event.record;
+      if (reuse){
+        let url = new URL(window.location.href);
+        url.searchParams.delete("record");
+        window.location.href = url.toString();
+      }
+      return event;
+    });
+    // hide duplicate button
+    kintone.events.on([
+      'app.record.detail.show'
+    ], (event) => {
+      $('a.gaia-argoui-app-menu-copy').hide();
+      return event;
+    });
+    
+    // Event after a successful save
+    kintone.events.on([
+        'app.record.create.submit.success',
+        'app.record.edit.submit.success',
+    ], async (event) => {
+        try {
+            if (event.record[FIELD_QUOTATION_NUMBER].value){
+              const req = {
+                  "app": ORDER_MANAGEMENT_APP_ID,
+                  "id": event.record[FIELD_QUOTATION_NUMBER].value,
+                  "record": {
+                      [FIELD_STATUS]: {
+                          value: STATUS_ORDERED
+                      }
+                  }
+              }
+              await kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT', req);
+            }
+        } catch (error) {
+            console.log(error)
+            alert('Error: ' + error.message)
+        }
+
+        return event
+    });
+
+
+    // Calculating consumptionTax, amount
+    function calculateData(row, quantity, unitPrice, taxType, taxRate) {
+        let consumptionTax = 0
+        let amount = 0
+
+        if (!quantity|| isNaN(quantity) || !unitPrice || isNaN(unitPrice)) {
+            return
+        }
+        if (!taxType || !taxRate) {
+            consumptionTax = 0
+            amount = quantity * unitPrice
+        } else {
+            if (taxType == TAX_INCLUSIVE) {
+                consumptionTax = (unitPrice * (1 - 1/(1 + taxRate/100))) * quantity
+                amount = unitPrice * quantity
+            } else if (taxType == TAX_EXCLUSIVE) {
+                consumptionTax = (unitPrice * (taxRate/100)) * quantity
+                amount = (unitPrice * (1 + taxRate/100)) * quantity                
+            }
+        }
+
+        // Fill calculate result
+        row.value[FIELD_CONSUMPTION_TAX].value = roundNumber(consumptionTax)
+        row.value[FIELD_AMOUNT].value = roundNumber(amount)
+    }
+
+
+    // Calculate subTotal, consumptionTaxTotal, total
+    function calculateApp(event, subTableRows) {
+        let total = 0
+        let consumptionTaxTotal = 0
+        subTableRows.forEach(row => {
+            total += Number(row.value[FIELD_AMOUNT].value ? row.value[FIELD_AMOUNT].value : 0)
+            consumptionTaxTotal += Number(row.value[FIELD_CONSUMPTION_TAX].value ? row.value[FIELD_CONSUMPTION_TAX].value : 0)
+        });
+        event.record[FIELD_TOTAL].value = total
+        event.record[FIELD_CONSUMPTION_TAX_TOTAL].value = consumptionTaxTotal
+        event.record[FIELD_SUB_TOTAL].value = (total - consumptionTaxTotal);
+    }
+
+    // Round number to floor, ceil or nearest
+    function roundNumber(value) {
+        let result = Math.round(value)
+        if (roundType == ROUND_UP) {
+            result = Math.ceil(value)
+        } else if (roundType == ROUND_DOWN) {
+            result = Math.floor(value)            
+        }
+        return result
+    }
+
+
+
+})(jQuery, kintone.$PLUGIN_ID);

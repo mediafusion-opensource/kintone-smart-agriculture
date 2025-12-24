@@ -1,0 +1,536 @@
+jQuery.noConflict();
+
+
+(async function($, PLUGIN_ID) {
+    "use strict";
+
+    const appId = kintone.app.getId()
+
+    const FIELD_SUB_TABLE = '商品リスト'
+    const FIELD_CONSUMPTION_TAX = '消費税'
+    const FIELD_CONSUMPTION_TAX_TOTAL = '消費税合計'
+    const FIELD_AMOUNT = '金額'
+    const FIELD_QUANTITY = '数量'
+    
+    const FIELD_TAX_TYPE = '課税'
+    const TAX_INCLUSIVE = '内税'
+    const TAX_EXCLUSIVE = '外税'
+    const FIELD_TAX_RATE = '税率'
+    
+    const FIELD_FREEE_TAX_RATE = 'freee_税率'
+    const FREEE_TAX_RATE_10 = '10%'
+    const FREEE_TAX_RATE_8 = '8%'
+    const FREEE_TAX_RATE_8_SPECIAL = '8%（軽減税率）'
+    const FREEE_TAX_RATE_0 = '0%'
+    
+    const FIELD_TOTAL = '合計'
+    const FIELD_BILL_DATE = '請求書作成日時'
+    const FIELD_UNIT_PRICE = '単価'
+    const FIELD_SALE = '販売先'
+    const FIELD_PRODUCT_NAME = '商品名'
+    const FIELD_PRODUCT_CODE = '商品'
+    const FIELD_SALE_CODE = '販売先コード'
+    const FIELD_SALE_PRICE = '販売価格'
+    const SUB_TABLE_PRICE = '販売先別価格'
+    const FIELD_SUB_TOTAL = '小計'
+    const APP_PRODUCT_FIELD_PRODUCT_CODE = '商品コード'
+    const FIELD_STANDARD_PRICE= '標準価格'
+    const FIELD_ROUND_TYPE = '端数処理区分'
+    
+    const ROUND_UP = '切り上げ'
+    const ROUND_DOWN = '切り捨て'
+    const ROUND_NEAREST = '四捨五入'
+    let roundType = ROUND_NEAREST
+    
+    const fieldCodes = [FIELD_ROUND_TYPE, FIELD_QUANTITY, FIELD_UNIT_PRICE, FIELD_TAX_TYPE, FIELD_TAX_RATE]
+    let editFieldEvents = []
+    fieldCodes.forEach(fieldCode => {
+        editFieldEvents.push('app.record.edit.change.' + fieldCode)
+        editFieldEvents.push('app.record.create.change.' + fieldCode)
+    })
+    
+    const APP_NAME_PRODUCT = '商品マスター管理'
+
+    let products = []
+    let prices = []
+    let recordId
+    
+    const MESSAGES = {
+      'ja': {
+        'ERROR_DUPLICATED': '値が既に存在します。',
+      },
+      'en': {
+        'ERROR_DUPLICATED': 'The value already exists.'
+      }
+    }
+    const language = kintone.getLoginUser().language || 'en';
+    const locales = MESSAGES[language];
+    const FORM_DATA = cybozu.data.page['FORM_DATA'];
+    const ELEMENT_FIELD_ID = {};
+    const fieldList = FORM_DATA.schema.table.fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+    for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+      ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+      const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+      for (const fieldId of Object.keys(fieldList)) {
+        ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+      }
+    }
+    // auto lookup kintone
+    kintone.events.on(['app.record.create.show'], (event) => {
+        const record = event.record;
+    
+        const subTableRows = record[FIELD_SUB_TABLE].value; 
+    
+        subTableRows.forEach((row, index) => {
+            const productField = row.value['商品']; 
+            
+            if (productField && productField.value) {
+                
+                const lookupButton = $(`.subtable-row-gaia`).eq(index).find('button.input-lookup-gaia');
+                
+                if (lookupButton.length) {
+                    lookupButton.click();
+                }
+            }
+        });
+            const hanbaikodoFieldId = ELEMENT_FIELD_ID[FIELD_SALE_CODE];
+            const nohinbanFieldId = ELEMENT_FIELD_ID['納品番号'];
+        
+            if (record[FIELD_SALE_CODE] && record[FIELD_SALE_CODE].value) {
+                const hanbaikodoLookupButton = $(`.field-${hanbaikodoFieldId}`).find('button.input-lookup-gaia');
+                if (hanbaikodoLookupButton.length) {
+                    hanbaikodoLookupButton.click();
+                }
+            }
+        
+            if (record['納品番号'] && record['納品番号'].value) {
+                const nohinbanLookupButton = $(`.field-${nohinbanFieldId}`).find('button.input-lookup-gaia');
+                if (nohinbanLookupButton.length) {
+                    nohinbanLookupButton.click();
+                }
+            }
+        return event;
+    });
+
+
+    // Event of custome funtions
+    document.addEventListener("DOMContentLoaded", function() {
+      MF_CABINEX_PLUGIN.exportFileSucceed = async (event) => {
+          const reqUpdate = {
+              "app": appId,
+              "id": recordId,
+              "record": {
+                  [FIELD_BILL_DATE]: {
+                      value: moment().format("YYYY-MM-DDTHH:mm:ss+09:00")
+                  }
+              }
+          }
+          try {
+              await kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT', reqUpdate)
+          } catch (error) {
+              console.log(error)
+              alert('Error: ' + error.message)
+          }
+
+      }
+    
+    });
+    kintone.events.on([
+      'app.record.create.show',
+      'app.record.edit.show',
+      `app.record.create.change.${FIELD_FREEE_TAX_RATE}`,
+      `app.record.edit.change.${FIELD_FREEE_TAX_RATE}`,
+      `app.record.create.change.${FIELD_SUB_TABLE}`,
+      `app.record.edit.change.${FIELD_SUB_TABLE}`,
+    ], (event) => {
+      const record = event.record;
+      for (const row of record[FIELD_SUB_TABLE].value){
+        
+        if (row.value[FIELD_FREEE_TAX_RATE].value == FREEE_TAX_RATE_10){
+          row.value[FIELD_TAX_RATE].value = 10;
+        }
+        else if (row.value[FIELD_FREEE_TAX_RATE].value == FREEE_TAX_RATE_8 || row.value[FIELD_FREEE_TAX_RATE].value == FREEE_TAX_RATE_8_SPECIAL){
+          row.value[FIELD_TAX_RATE].value = 8;
+        }
+        else row.value[FIELD_TAX_RATE].value = 0;
+      }
+      return event;
+    })
+    
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+        'app.record.detail.show'
+    ], async (event) => {
+      const targetElement = $(`.subtable-${ELEMENT_FIELD_ID[FIELD_SUB_TABLE]} tbody`)[0];
+      const config = { childList: true, subtree: true };
+      const callback = function(mutationsList, observer) {
+          mutationsList.forEach(function(mutation) {
+            $(`.label-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).hide();
+            $(`.field-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).closest('td').hide();
+          });
+      };
+      const observer = new MutationObserver(callback);
+      observer.observe(targetElement, config);
+      $(`.label-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).hide();
+      $(`.field-${ELEMENT_FIELD_ID[FIELD_TAX_RATE]}`).closest('td').hide();
+      return event;
+    })
+    
+    
+    // Event on Edit field in App or Edit fields in Subtable
+    kintone.events.on(editFieldEvents, (event) => {
+        // alert('editFieldEvents')
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        roundType = event.record[FIELD_ROUND_TYPE].value ? event.record[FIELD_ROUND_TYPE].value : ROUND_NEAREST
+
+        if (event.changes.row && event.changes.row.id) {    // change field of subtable
+            // Calculate this row
+            calculateData(
+                subTableRows.find(row => row.id == event.changes.row.id), 
+                event.changes.row.value[FIELD_QUANTITY].value, 
+                event.changes.row.value[FIELD_UNIT_PRICE].value, 
+                event.changes.row.value[FIELD_TAX_TYPE].value, 
+                event.changes.row.value[FIELD_TAX_RATE].value)
+        } else { // change field of App
+            // Calculate all rows in subtable
+            subTableRows.forEach(row => {
+                calculateData(row, 
+                    row.value[FIELD_QUANTITY].value, 
+                    row.value[FIELD_UNIT_PRICE].value, 
+                    row.value[FIELD_TAX_TYPE].value, 
+                    row.value[FIELD_TAX_RATE].value)
+            })
+        }
+
+        // Calculate subTotal, consumptionTaxTotal, total
+        calculateApp(event, subTableRows)
+
+        return event
+    });
+    
+    // Disable calculate fields
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+        'app.record.create.change.' + FIELD_SUB_TABLE,
+        'app.record.edit.change.' + FIELD_SUB_TABLE,
+    ], (event) => {
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        roundType = event.record[FIELD_ROUND_TYPE].value ? event.record[FIELD_ROUND_TYPE].value : ROUND_NEAREST
+        
+        subTableRows.forEach(row => {
+            calculateData(row, 
+                row.value[FIELD_QUANTITY].value, 
+                row.value[FIELD_UNIT_PRICE].value, 
+                row.value[FIELD_TAX_TYPE].value, 
+                row.value[FIELD_TAX_RATE].value)
+
+            row.value[FIELD_CONSUMPTION_TAX].disabled = true
+            row.value[FIELD_AMOUNT].disabled = true
+        })
+        event.record[FIELD_SUB_TOTAL].disabled = true
+        event.record[FIELD_CONSUMPTION_TAX_TOTAL].disabled = true
+        event.record[FIELD_TOTAL].disabled = true
+
+        
+        // Calculate subTotal, consumptionTaxTotal, total
+        calculateApp(event, subTableRows)
+        return event
+    });
+
+    kintone.events.on([
+      'app.record.create.submit',
+      'app.record.edit.submit'
+    ], async (event) => {
+      const record = event.record;
+      $('.input-error-cybozu-customize').remove();
+      const table = record['商品リスト'].value;
+      const productList = [];
+      let check = true;
+      for (const [index, item] of table.entries()){
+        if (!productList.includes(item.value['商品'].value)){
+          productList.push(item.value['商品'].value)
+        }
+        else {
+          $(`.field-${ELEMENT_FIELD_ID['商品']}`).eq(index).append(`<div class="input-error-cybozu input-error-cybozu-customize">${locales['ERROR_DUPLICATED']}</div>`);
+          check = false;
+        }
+      }
+      if (!check) return false;
+      return event;
+    });
+
+    kintone.events.on(['app.record.edit.change.' + [FIELD_AMOUNT],
+        'app.record.create.change.' + [FIELD_AMOUNT]
+    ], (event) => {
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        calculateApp(event, subTableRows)
+
+        return event
+    });
+
+
+    // Calculate field Total
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+        'app.record.create.change.' + FIELD_SUB_TABLE,
+        'app.record.edit.change.' + FIELD_SUB_TABLE,
+    ], (event) => {
+        event.record[FIELD_TOTAL].disabled = true
+
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        calculateApp(event, subTableRows)
+        return event
+    });
+
+
+    // Event on Create record, Edit record
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+    ], async (event) => {
+        // Get all product
+        await getAllProducts()
+      const record = event.record;
+      record['商品データソース'].disabled = true;
+        if(record['商品データソース'].value == " CSVからインポート"){
+          document.querySelectorAll('.subtable-gaia .add-row-image-gaia, .subtable-gaia .remove-row-image-gaia').forEach(btn => {
+                     btn.style.display = 'none'; 
+           });
+        }
+        if(record['商品データソース'].value !== "手動入力"){
+        kintone.app.record.setFieldShown(FIELD_ROUND_TYPE, false);
+        }
+        return event
+    });
+
+
+    // Event on Change Sale destination
+    kintone.events.on([
+        'app.record.create.change.' + FIELD_SALE,
+        'app.record.edit.change.' + FIELD_SALE,
+    ], (event) => {
+        // Case: duplicate from App Shipping
+        if (!products || products.length <= 0) {
+            getAllProducts()
+            return event
+        }
+
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        let saleCode = event.record[FIELD_SALE_CODE].value
+
+        // Clear lookup Sale
+        if (!saleCode) {                                
+            subTableRows.forEach(row => {
+                row.value[FIELD_UNIT_PRICE].value = 0
+            })
+            return event
+        }
+
+        let i = 0
+        while(i < subTableRows.length) {
+            let row = subTableRows[i++]
+            let productCode = row.value[FIELD_PRODUCT_CODE].value
+            // No product -> Skips
+            if (!productCode) {
+                continue
+            }
+            const product = products.find(product => product[APP_PRODUCT_FIELD_PRODUCT_CODE].value == productCode)
+            // Find price in subtable
+            prices = product ? product[SUB_TABLE_PRICE].value : [];
+            const price = prices.find(price => price.value[FIELD_SALE_CODE].value == saleCode);
+            let unitPrice = price?.value?.[FIELD_SALE_PRICE]?.value || product?.[FIELD_STANDARD_PRICE]?.value || 0;
+            row.value[FIELD_UNIT_PRICE].value = unitPrice
+        }
+        calculateApp(event, subTableRows)
+        return event
+    });
+
+
+    // Event on Change Product
+    kintone.events.on([
+        'app.record.create.change.' + FIELD_PRODUCT_NAME,
+        'app.record.edit.change.' + FIELD_PRODUCT_NAME,
+    ], (event) => {
+        // Case: duplicate from App Shipping
+        if (!products || products.length <= 0) {
+            getAllProducts()
+            return event
+        }
+
+        let subTableRows = event.record[FIELD_SUB_TABLE].value
+        let saleCode = event.record[FIELD_SALE_CODE].value
+
+        // Clear lookup Product
+        if (!event.changes.field.value) {        
+            let row = subTableRows.find(row => row.value[FIELD_PRODUCT_CODE].value == event.changes.row.value[FIELD_PRODUCT_CODE].value)
+            row.value[FIELD_UNIT_PRICE].value = 0
+            row.value[FIELD_AMOUNT].value = 0
+            calculateApp(event, subTableRows)
+            return event
+        }
+
+        let i = 0
+        while(i < subTableRows.length) {
+            let row = subTableRows[i++]
+            let productCode = row.value[FIELD_PRODUCT_CODE].value
+            // No product -> Skips
+            if (!productCode) {
+                continue
+            }
+            const product = products.find(product => product[APP_PRODUCT_FIELD_PRODUCT_CODE].value == productCode)
+            // Find price in subtable
+            prices = product ? product[SUB_TABLE_PRICE].value : [];
+            const price = prices.find(price => price.value[FIELD_SALE_CODE].value == saleCode);
+            let unitPrice = price?.value?.[FIELD_SALE_PRICE]?.value || product?.[FIELD_STANDARD_PRICE]?.value || 0;
+            row.value[FIELD_UNIT_PRICE].value = unitPrice
+        }
+        calculateApp(event, subTableRows)
+        return event
+    });
+
+
+    // Event After viewing the record details screen
+    kintone.events.on([
+        'app.record.detail.show',
+    ], async (event) => {
+        recordId = event.recordId
+        return event
+    });
+    
+    // Calculating consumptionTax, amount
+    function calculateData(row, quantity, unitPrice, taxType, taxRate) {
+        let consumptionTax = 0
+        let amount = 0
+
+        if (!quantity|| isNaN(quantity) || !unitPrice || isNaN(unitPrice)) {
+            return
+        }
+        if (!taxType || !taxRate) {
+            consumptionTax = 0
+            amount = quantity * unitPrice
+        } else {
+            if (taxType == TAX_INCLUSIVE) {
+                consumptionTax = (unitPrice * (1 - 1/(1 + taxRate/100))) * quantity
+                amount = unitPrice * quantity
+            } else if (taxType == TAX_EXCLUSIVE) {
+                consumptionTax = (unitPrice * (taxRate/100)) * quantity
+                amount = (unitPrice * (1 + taxRate/100)) * quantity                
+            }
+        }
+
+        // Fill calculate result
+        row.value[FIELD_CONSUMPTION_TAX].value = roundNumber(consumptionTax)
+        row.value[FIELD_AMOUNT].value = roundNumber(amount)
+    }
+    
+    // Calculate subTotal, consumptionTaxTotal, total
+    function calculateApp(event, subTableRows) {
+        let total = 0
+        let consumptionTaxTotal = 0
+        subTableRows.forEach(row => {
+            total += Number(row.value[FIELD_AMOUNT].value ? row.value[FIELD_AMOUNT].value : 0)
+            consumptionTaxTotal += Number(row.value[FIELD_CONSUMPTION_TAX].value ? row.value[FIELD_CONSUMPTION_TAX].value : 0)
+        });
+        event.record[FIELD_TOTAL].value = total
+        event.record[FIELD_CONSUMPTION_TAX_TOTAL].value = consumptionTaxTotal
+        event.record[FIELD_SUB_TOTAL].value = (total - consumptionTaxTotal)
+    }
+    
+    // Round number to floor, ceil or nearest
+    function roundNumber(value) {
+        let result = Math.round(value)
+        if (roundType == ROUND_UP) {
+            result = Math.ceil(value)
+        } else if (roundType == ROUND_DOWN) {
+            result = Math.floor(value)            
+        }
+        return result
+    }
+
+    // // Calculate total
+    // function calculateApp(event, subTableRows) {
+    //     let total = 0
+    //     subTableRows.forEach(row => {
+    //         total += Number(row.value[FIELD_AMOUNT].value ? row.value[FIELD_AMOUNT].value : 0)
+    //     });
+    //     event.record[FIELD_TOTAL].value = total
+    // }
+
+    // Refresh list all products
+    async function getAllProducts() {
+        const reqProduct = {
+            "app": PRODUCT_MASTER_MANAGEMENT_APP_ID,
+            "query": 'limit 500'
+        }
+        const respProduct = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', reqProduct)
+        products = respProduct.records
+    }
+    document.addEventListener("DOMContentLoaded", function() {
+      MF_LOOKUP_SUBTABLE.clearSucceed = () => {
+        let record = kintone.app.record.get().record;
+        record["商品データソース"].value = "手動入力";  
+        kintone.app.record.setFieldShown(FIELD_ROUND_TYPE, true);
+        kintone.app.record.set({ record: record });
+      };
+      MF_LOOKUP_SUBTABLE.lookupSucceed = (event) => {
+        // auto lookup in subtable
+         $(`.subtable-${ELEMENT_FIELD_ID['商品リスト']} button.input-lookup-gaia`).click();
+        let record = kintone.app.record.get().record;
+        kintone.app.record.setFieldShown(FIELD_ROUND_TYPE, false);
+        record["商品データソース"].value = "出荷のレコードから"; 
+        kintone.app.record.set({ record: record });
+    
+        document.querySelectorAll('.subtable-gaia .add-row-image-gaia, .subtable-gaia .remove-row-image-gaia').forEach(btn => {
+          btn.style.display = 'none'; 
+        });
+      };
+  });
+      kintone.events.on([
+       'app.record.create.change.' + FIELD_QUANTITY,
+       'app.record.create.change.' + FIELD_UNIT_PRICE,
+       'app.record.create.change.' + FIELD_TAX_TYPE,
+       'app.record.create.change.' + FIELD_TAX_RATE,
+       'app.record.edit.change.' + FIELD_QUANTITY,
+       'app.record.edit.change.' + FIELD_UNIT_PRICE,
+       'app.record.edit.change.' + FIELD_TAX_TYPE,
+       'app.record.edit.change.' + FIELD_TAX_RATE
+        ], function(event) {
+        const record = event.record;
+
+       if (record['商品データソース'].value === '出荷のレコードから' || record['商品データソース'].value === 'CSVからインポート') {
+           kintone.app.record.setFieldShown(FIELD_ROUND_TYPE, true);
+        }
+
+         return event;
+      });
+      
+    // clear value after duplicate record
+    kintone.events.on([
+      'app.record.create.show'
+    ], (event) => {
+      console.log('event', event);
+      const reuse = event.reuse;
+      const record = event.record;
+      if (reuse){
+        let url = new URL(window.location.href);
+        url.searchParams.delete("record");
+        window.location.href = url.toString();
+      }
+      return event;
+    });
+    // hide duplicate button
+    kintone.events.on([
+      'app.record.detail.show'
+    ], (event) => {
+      $('a.gaia-argoui-app-menu-copy').hide();
+      return event;
+    });
+
+
+})(jQuery, kintone.$PLUGIN_ID);

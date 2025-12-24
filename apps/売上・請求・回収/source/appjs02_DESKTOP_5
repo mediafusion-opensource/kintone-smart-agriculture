@@ -1,0 +1,689 @@
+// jQuery.noConflict();
+
+
+// (async function($, PLUGIN_ID) {
+//     "use strict";
+
+//     const FIELD_SUB_TABLE = '商品リスト'
+//     const FIELD_AMOUNT = '金額'
+//     const FIELD_TOTAL = '合計'
+//     const FIELD_PRODUCT_CODE = '商品'
+//     const FIELD_PRODUCT_NAME = '商品名'
+//     const FIELD_QUALITY = '品質規格'
+//     const FIELD_SHIP_UNIT = '出荷単位'
+//     const FIELD_STOCK_QUANTITY = '在庫数量'
+//     const FIELD_SORT_QUANTITY = '選別数量'
+//     const FIELD_SHIP_QUANTITY = '出荷数量'
+//     const FIELD_REMAIN_QUANTITY = '注文残'
+//     const FIELD_SHIP_DATE = '出荷日付'
+//     const FIELD_REMARK = '商品備考'
+//     const FIELD_TAX_TYPE = '課税'
+//     const FIELD_DELIVERY_NUMBER = '納品番号'
+//     const FIELD_SALE = '販売先'
+    
+//     const INDEX_FIELD_REMARK = 13
+
+//     const FIELD_ORDER_QUANTITY = '数量'
+//     const FIELD_UNIT_PRICE = '単価'
+    
+//     let appStockId = INVENTORY_MANAGEMENT_APP_ID;
+//     let stocks = []
+//     let selectedStocks = []
+//     const APP_NAME_STOCK = '在庫管理'
+//     const APP_STOCK_FIELD_PRODUCT_CODE = '商品'
+//     const APP_STOCK_FIELD_CURRENT_QUANTITY = '現在の在庫数'
+
+//     const APP_STOCK_SUBTABLE_ARRIVAL = '入荷'
+//     const APP_STOCK_ARRIVAL_SORT_NUMBER = '入荷_選別ロット番号'
+//     const APP_STOCK_ARRIVAL_SORT_DATE = '入荷_選別日'
+//     const APP_STOCK_ARRIVAL_REMAIN_QUANTITY = '残り数'
+
+//     const APP_STOCK_SUBTABLE_SHIP = '出荷'
+//     const APP_STOCK_SHIP_DATE = '出荷日'
+//     const APP_STOCK_SHIP_QUANTITY = '出荷数'
+//     const APP_STOCK_SHIP_SORT_NUMBER = '出荷_選別ロット番号'
+//     const APP_STOCK_SHIP_SORT_DATE = '出荷_選別日'
+//     const APP_STOCK_SHIP_ARRIVAL_ID = '入荷ID';
+//     const APP_STOCK_SHIP_SHIPPING_AND_DELIVERY_ID = '出荷_納品ID';
+//     const TMP_DATE = '1970-01-01'
+    
+    
+//     let appSortId = SORTING_MANAGEMENT_APP_ID;
+//     let availableSorts = []
+//     let selectedSorts = []
+//     const APP_NAME_SORT = '選別管理'
+//     const APP_SORT_FIELD_DATE = '選別日付'
+//     const APP_SORT_FIELD_TOTAL = '数量合計'
+//     const APP_SORT_FIELD_SUBTABLE = '選別データ'
+//     const APP_SORT_FIELD_PRODUCT = '商品'
+//     const APP_SORT_FIELD_QUANTITY = '数量'
+    
+
+//     let objRemarks = []
+//     let tmpObjRemark = {}
+
+//     let htmlDisabledAction = `
+//     <div class="recordlist-cell-edit-and-remove-action"><button type="button" class="recordlist-edit-gaia recordlist-disabled-gaia" title="Edit (No permissions)" aria-label="Edit (No permissions)" disabled=""><img class="recordlist-edit-icon-gaia" src="https://static.cybozu.com/contents/k/image/argo/component/recordlist/record-edit-disabled.png" alt=""></button><button type="button" class="recordlist-remove-gaia recordlist-disabled-gaia" title="Delete (No permissions)" aria-label="Delete (No permissions)" disabled=""><img class="recordlist-remove-icon-gaia" src="https://static.cybozu.com/contents/k/image/argo/component/recordlist/record-delete-disabled.png" alt=""></button></div>
+//     `
+//     const FORM_DATA = cybozu.data.page['FORM_DATA'];
+//     const ELEMENT_FIELD_ID = {};
+//     const fieldList = FORM_DATA.schema.table.fieldList;
+//     for (const fieldId of Object.keys(fieldList)) {
+//       ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+//     }
+//     for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+//       ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+//       const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+//       for (const fieldId of Object.keys(fieldList)) {
+//         ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+//       }
+//     }
+//     // Event of custome funtions
+//     document.addEventListener("DOMContentLoaded", (event) => {
+
+//         // After lookup success
+//         MF_LOOKUP_SUBTABLE.lookupSucceed = async (event) => {
+//             selectedStocks = []
+//             selectedSorts = []
+
+//             let objEvent = kintone.app.record.get()
+//             objEvent.record[FIELD_SUB_TABLE].value.forEach(async row => {
+//                 calculateOneRow(row)
+//             })
+
+//             kintone.app.record.set(objEvent)
+
+//         }
+
+//         // After export success
+//         MF_CABINEX_PLUGIN.exportFileSucceed = async (event) => {
+//             selectedStocks = []
+//             selectedSorts = []
+
+//         }
+    
+//     });
+//     kintone.events.on([`app.record.create.change.${FIELD_SHIP_DATE}`, `app.record.edit.change.${FIELD_SHIP_DATE}`], function(event){
+//       setTimeout(() => {
+//         selectedStocks = []
+//         selectedSorts = []
+  
+//         let objEvent = kintone.app.record.get()
+//         objEvent.record[FIELD_SUB_TABLE].value.forEach(async row => {
+//             calculateOneRow(row)
+//         })
+  
+//         kintone.app.record.set(objEvent)
+//       }, 1)
+//       return event;
+//     });
+
+//     // Event After displaying the record editing screen
+//     kintone.events.on([
+//         'app.record.edit.show',
+//     ], async (event) => {
+//         if (event.record[FIELD_DELIVERY_NUMBER].value?.length > 0) {
+//             window.location.href = window.location.href.replaceAll('&mode=edit', '')
+//         }
+//         return event
+//     });
+
+
+//     // Disable calculate fields
+//     kintone.events.on([
+//         'app.record.create.show',
+//         'app.record.edit.show',
+//         'app.record.create.change.' + FIELD_SUB_TABLE,
+//         'app.record.edit.change.' + FIELD_SUB_TABLE,
+//     ], (event) => {
+//         // Hide column Remark, column action
+//         $('table tr td:nth-child('+INDEX_FIELD_REMARK+'), table tr th:nth-child('+INDEX_FIELD_REMARK+')').hide()
+//         $('table tr td:last-child').hide()
+
+//         let subTableRows = event.record[FIELD_SUB_TABLE].value
+//         subTableRows.forEach(row => {
+//             row.value[FIELD_PRODUCT_CODE].disabled = true
+//             row.value[FIELD_PRODUCT_NAME].disabled = true
+//             row.value[FIELD_QUALITY].disabled = true
+//             row.value[FIELD_SHIP_UNIT].disabled = true
+//             row.value[FIELD_AMOUNT].disabled = true
+//             row.value[FIELD_UNIT_PRICE].disabled = true
+//             row.value[FIELD_TAX_TYPE].disabled = true
+//             row.value[FIELD_ORDER_QUANTITY].disabled = true
+//             row.value[FIELD_STOCK_QUANTITY].disabled = true
+//             row.value[FIELD_SORT_QUANTITY].disabled = true
+//             row.value[FIELD_SHIP_QUANTITY].disabled = true
+//             row.value[FIELD_REMAIN_QUANTITY].disabled = true
+//         })
+//         event.record[FIELD_TOTAL].disabled = true
+//         return event
+//     });
+
+
+//     // Event on After displaying the list screen
+//     kintone.events.on([
+//         'app.record.index.show',
+//     ], async (event) => {
+//         // Disabled Edit/Delete records that 納品番号 has value
+//         // const records = event.records
+//         // let indexs = []
+//         // for (let i = 0; i < records.length; i++) {
+//         //     if (records[i][FIELD_DELIVERY_NUMBER].value?.length > 0) {
+//         //         indexs.push(i)
+//         //     }
+//         // }
+//         // $('table tbody').find('tr').each((idx, row) => {
+//         //     if (indexs.includes(idx)) {
+//         //         $(row).find('td:last-child').html(htmlDisabledAction)
+//         //     }
+//         // })
+
+//         return event
+//     });
+
+
+//     // Event on Create record, Edit record
+//     kintone.events.on([
+//         'app.record.create.show',
+//         'app.record.edit.show',
+//     ], async (event) => {
+
+//         // Get all Stock
+//         const reqStock = {
+//             "app": appStockId,
+//             "query": ' limit 500'
+//         }
+//         const respStock = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', reqStock)
+//         stocks = respStock.records
+
+//         // Get available Sort
+//         const reqSort = {
+//             "app": appSortId,
+//             "query": APP_SORT_FIELD_TOTAL + ' > 0 order by '+APP_SORT_FIELD_DATE+' asc limit 500'
+//         }
+//         const respSort = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', reqSort)
+//         availableSorts = respSort.records
+
+//         selectedStocks = []
+//         selectedSorts = []
+
+//         return event
+//     });
+
+    
+//     // Event on Detail record
+//     kintone.events.on([
+//         'app.record.detail.show',
+//     ], async (event) => {
+
+//         // Hide column Remark
+//         // $('table tr td:nth-child('+INDEX_FIELD_REMARK+'), table tr th:nth-child('+INDEX_FIELD_REMARK+')').hide()
+
+//         // if (event.record[FIELD_DELIVERY_NUMBER].value?.length > 0) {
+//         //     $('a.gaia-argoui-app-menu-edit').hide()
+//         // } else {
+//         //     $('a.gaia-argoui-app-menu-edit').show()
+//         // }
+//         $(`th.label-${ELEMENT_FIELD_ID[FIELD_REMARK]}`).hide();
+//         setTimeout(()=> {
+//           $(`.field-${ELEMENT_FIELD_ID[FIELD_REMARK]}`).parent().hide();
+//         }, 100)
+//         return event
+//     });
+
+
+//     /**
+//     * Calculate the number of product in subtables: Arrival, Shipped
+//     * @param {*} selectedStock 
+//     * @param {*} remainQuantity 
+//     * @returns 
+//     */
+//     function calculateStock(selectedStock, remainQuantity, shipDate) {
+//         const record = kintone.app.record.get().record;
+//         // update object Stock
+//         let arrivals = selectedStock[APP_STOCK_SUBTABLE_ARRIVAL].value
+        
+//         let ships = selectedStock[APP_STOCK_SUBTABLE_SHIP].value
+
+//         // Filter by remain quantity > 0 && Order by Sorting date asc
+//         let validArrivals = arrivals
+//         .filter(row => row.value[APP_STOCK_ARRIVAL_REMAIN_QUANTITY].value > 0)
+//         .sort(function(rowA, rowB) {
+//             return moment(rowA.value[APP_STOCK_ARRIVAL_SORT_DATE].value, "YYYY-MM-DD").toDate() - moment(rowB.value[APP_STOCK_ARRIVAL_SORT_DATE].value, "YYYY-MM-DD").toDate()
+//         })
+
+//         // calculate remain quantity
+//         let mapValidArrival = new Map()
+//         for (let i = 0; i < validArrivals.length; i++) {
+//             let arrival = validArrivals[i]
+//             let arrivalRemain = arrival.value[APP_STOCK_ARRIVAL_REMAIN_QUANTITY]
+//             if (arrivalRemain.value >= remainQuantity) {
+//                 // row Ship
+//                 let exitedShip = ships.find(ship => ship.value[APP_STOCK_SHIP_SORT_NUMBER].value == arrival.value[APP_STOCK_ARRIVAL_SORT_NUMBER].value
+//                     && ship.value[APP_STOCK_SHIP_SORT_DATE].value == shipDate
+//                 )
+//                 if (exitedShip) {
+//                     exitedShip.value[APP_STOCK_SHIP_QUANTITY].value = Number(exitedShip.value[APP_STOCK_SHIP_QUANTITY].value) + remainQuantity
+//                 } else {
+//                     ships.push({
+//                         value: {
+//                             [APP_STOCK_SHIP_DATE]: {value: TMP_DATE},
+//                             [APP_STOCK_SHIP_QUANTITY]: {value: remainQuantity},
+//                             [APP_STOCK_SHIP_SORT_NUMBER]: {value: arrival.value[APP_STOCK_ARRIVAL_SORT_NUMBER].value},
+//                             [APP_STOCK_SHIP_ARRIVAL_ID]: {value: arrival.id},
+//                             [APP_STOCK_SHIP_SORT_DATE]: {value: shipDate},
+//                         }
+//                     })
+//                 }
+
+//                 // row Arrival
+//                 arrivalRemain.value -= remainQuantity
+//                 mapValidArrival.set(arrival.id, arrival)
+
+//                 // Add this arrival to tmpObjRemark
+//                 tmpObjRemark.stock.push({
+//                     "id": arrival.id,
+//                     "quantity": remainQuantity
+//                 })
+
+//                 break
+//             } else {
+//                 let arrivalRemainValue = Number(arrivalRemain.value)
+//                 // row Ship
+//                 let exitedShip = ships.find(ship => ship.value[APP_STOCK_SHIP_SORT_NUMBER].value == arrival.value[APP_STOCK_ARRIVAL_SORT_NUMBER].value
+//                     && ship.value[APP_STOCK_SHIP_SORT_DATE].value == shipDate
+//                 )
+//                 if (exitedShip) {
+//                     exitedShip.value[APP_STOCK_SHIP_QUANTITY].value = Number(exitedShip.value[APP_STOCK_SHIP_QUANTITY].value) + arrivalRemainValue
+//                 } else {
+//                     ships.push({
+//                         value: {
+//                             [APP_STOCK_SHIP_DATE]: {value: TMP_DATE},
+//                             [APP_STOCK_SHIP_QUANTITY]: {value: arrivalRemainValue},
+//                             [APP_STOCK_SHIP_SORT_NUMBER]: {value: arrival.value[APP_STOCK_ARRIVAL_SORT_NUMBER].value},
+//                             [APP_STOCK_SHIP_ARRIVAL_ID]: {value: arrival.id},
+//                             [APP_STOCK_SHIP_SORT_DATE]: {value: shipDate},
+//                         }
+//                     })
+//                 }
+                
+//                 // row Arrival
+//                 remainQuantity -= arrivalRemainValue
+//                 arrivalRemain.value = 0
+//                 mapValidArrival.set(arrival.id, arrival)
+
+//                 // Add this arrival to tmpObjRemark
+//                 tmpObjRemark.stock.push({
+//                     "id": arrival.id,
+//                     "quantity": arrivalRemainValue
+//                 })
+//             }
+//         }
+
+//         // update row of arrival
+//         arrivals.map(arrival => (mapValidArrival.get(arrival.id) ? mapValidArrival.get(arrival.id) : arrival))
+        
+//         return selectedStock
+//     }
+
+
+//     // Event after a successful save: Update Apps Stock, Sort
+//     kintone.events.on([
+//         'app.record.create.submit.success',
+//         // 'app.record.edit.submit.success',
+//     ], async (event) => {
+//         const record = event.record;
+//         let shipDate = record[FIELD_SHIP_DATE].value
+
+//         // Update App Stock
+//         selectedStocks.forEach(async stock => {
+//             for (let i = 0; i < stock[APP_STOCK_SUBTABLE_SHIP].value.length; i++) {
+//                 let ship = stock[APP_STOCK_SUBTABLE_SHIP].value[i]
+//                 if (!ship.value[APP_STOCK_SHIP_QUANTITY].value || !ship.value[APP_STOCK_SHIP_SORT_NUMBER].value || !ship.value[APP_STOCK_SHIP_SORT_DATE].value) {
+//                     stock[APP_STOCK_SUBTABLE_SHIP].value.splice(i, 1)
+//                     break
+//                 }
+//             }
+            
+//             stock[APP_STOCK_SUBTABLE_SHIP].value.forEach(ship => {
+//                 if (ship.value[APP_STOCK_SHIP_DATE].value == TMP_DATE) {
+//                     ship.value[APP_STOCK_SHIP_DATE].value = shipDate
+//                     ship.value[APP_STOCK_SHIP_SHIPPING_AND_DELIVERY_ID] = record['$id'].value;
+//                 }
+//                 // ship.remove
+//             })
+//             const req = {
+//                 "app": appStockId,
+//                 "id": stock.$id.value,
+//                 "record": {
+//                     [APP_STOCK_SUBTABLE_ARRIVAL]: {
+//                         value: stock[APP_STOCK_SUBTABLE_ARRIVAL].value
+//                     },
+//                     [APP_STOCK_SUBTABLE_SHIP]: {
+//                         value: stock[APP_STOCK_SUBTABLE_SHIP].value
+//                     }
+//                 }
+//             }
+//             try {
+//                 await kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT', req)
+//             } catch (error) {
+//                 console.log(error)
+//                 alert('Error: ' + error.message)
+//             }
+//         })
+
+//         // Restore quantity of unselected product in Sort
+//         // let productCodes = event.record[FIELD_SUB_TABLE].value.map(row => row.value[FIELD_PRODUCT_CODE].value)
+//         // selectedSorts.forEach(selectedSort => {
+//         //     selectedSort[APP_SORT_FIELD_SUBTABLE].value.forEach(row => {
+//         //         if (productCodes.includes(row.value[APP_SORT_FIELD_PRODUCT].value)) {
+//         //             return
+//         //         }
+//         //         let sourceSort = availableSorts.find(availableSort => availableSort.$id.value == selectedSort.$id.value)
+//         //         let sourceRow = sourceSort[APP_SORT_FIELD_SUBTABLE].value.find(sourceRow => sourceRow.value[APP_SORT_FIELD_PRODUCT].value == row.value[APP_SORT_FIELD_PRODUCT].value)
+//         //         row.value[APP_SORT_FIELD_QUANTITY].value = sourceRow.value[APP_SORT_FIELD_QUANTITY].value
+//         //     })
+//         // })
+
+//         // Update App Sort
+//         if (selectedSorts.length > 0) {
+//             let records = []
+//             selectedSorts.forEach(async sort => {
+//                 records.push({
+//                     "id": sort.$id.value,
+//                     "record": {
+//                         [APP_SORT_FIELD_SUBTABLE]: sort[APP_SORT_FIELD_SUBTABLE]
+//                     }
+//                 })
+//             })
+//             const req = {
+//                 "app": appSortId,
+//                 "records": records
+//             }
+//             try {
+//                 await kintone.api(kintone.api.url('/k/v1/records.json', true), 'PUT', req)
+//             } catch (error) {
+//                 console.log(error)
+//                 alert('Error: ' + error.message)
+//             }
+//         }
+//         return event
+//     });
+
+
+//     // Event Before deleting a record
+//     kintone.events.on([
+//         'app.record.index.delete.submit',
+//         'app.record.detail.delete.submit',
+//     ], async (event) => {
+
+//         // Get list current objRemarks[]
+//         objRemarks = event.record[FIELD_SUB_TABLE].value.filter(row => !!row).map(row => JSON.parse(row.value[FIELD_REMARK].value))
+//         if (objRemarks.length <= 0) {
+//             return event
+//         }
+
+//         let productCodes = []
+//         let sortIds = new Set()
+//         let mapSort = new Map()
+//         objRemarks.forEach(async objRemark => {
+//             productCodes.push(objRemark.productCode)
+//             objRemark.sort.forEach(item => {
+//                 sortIds.add(item.id)
+//                 if (!mapSort.get(item.id)) {
+//                     mapSort.set(item.id, [{
+//                         "productCode": objRemark.productCode,
+//                         "quantity": item.quantity
+//                     }])
+//                 } else {
+//                     mapSort.get(item.id).push({
+//                         "productCode": objRemark.productCode,
+//                         "quantity": item.quantity
+//                     })
+//                 }
+//             })
+//         })
+
+//         // Get Stocks
+//         const reqStock = {
+//             "app": appStockId,
+//             "query": APP_STOCK_FIELD_PRODUCT_CODE + ' in ('+ productCodes.map(code => '"' + code + '"').join(',') +') limit 500'
+//         }
+//         const respStock = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', reqStock)
+//         const stocks = respStock.records
+
+//         // Update App Stock
+//         let records = []
+//         objRemarks.forEach(async objRemark => {
+//             let stock = stocks.find(stock => stock[APP_STOCK_FIELD_PRODUCT_CODE].value == objRemark.productCode)
+//             if (!stock) return;
+//             let arrivals = stock[APP_STOCK_SUBTABLE_ARRIVAL].value
+//             let ships = stock[APP_STOCK_SUBTABLE_SHIP].value
+ 
+//             objRemark.stock.forEach(item => {
+//                 let arrival = arrivals.find(arrival => arrival.id == item.id)
+//                 if (!arrival) {
+//                     return
+//                 }
+//                 arrival.value[APP_STOCK_ARRIVAL_REMAIN_QUANTITY].value = Number(arrival.value[APP_STOCK_ARRIVAL_REMAIN_QUANTITY].value) + item.quantity
+//                 for (let i = 0; i < ships.length; i++) {
+//                     let ship = ships[i]
+//                     if (ship.value[APP_STOCK_SHIP_SORT_NUMBER].value != arrival.value[APP_STOCK_ARRIVAL_SORT_NUMBER].value) {
+//                         continue
+//                     }
+//                     let newShipQuantity = Number(ship.value[APP_STOCK_SHIP_QUANTITY].value) - item.quantity
+//                     if (newShipQuantity > 0) {
+//                         ship.value[APP_STOCK_SHIP_QUANTITY].value = newShipQuantity
+//                     } else {
+//                         ships.splice(i, 1)
+//                         i--
+//                     }
+//                 }
+//             })
+
+//             records.push({
+//                 "id": stock.$id.value,
+//                 "record": {
+//                     [APP_STOCK_SUBTABLE_ARRIVAL]: {
+//                         "value": arrivals
+//                     },
+//                     [APP_STOCK_SUBTABLE_SHIP]: {
+//                         "value": ships
+//                     }
+//                 }
+//             })
+//         })
+//         const req = {
+//             "app": appStockId,
+//             "records": records
+//         }
+//         try {
+//             await kintone.api(kintone.api.url('/k/v1/records.json', true), 'PUT', req)
+//         } catch (error) {
+//             console.log(error)
+//             alert('Error: ' + error.message)
+//         }
+
+
+//         // Get Sorts
+//         const reqSort = {
+//             "app": appSortId,
+//             "query": '$id in ('+ Array.from(mapSort.keys()).map(id => '"' + id + '"').join(',') +') limit 500'
+//         }
+//         const respSort = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', reqSort)
+//         const sorts = respSort.records
+
+//         let recordSorts = []
+//         sorts.forEach(async sort => {
+//             let objSort = mapSort.get(sort.$id.value)
+//             let rows = sort[APP_SORT_FIELD_SUBTABLE].value
+//             rows.forEach(async row => {
+//                 let matchObj = objSort.find(obj => obj.productCode == row.value[APP_SORT_FIELD_PRODUCT].value)
+//                 if (matchObj) {
+//                     row.value[APP_SORT_FIELD_QUANTITY].value = Number(row.value[APP_SORT_FIELD_QUANTITY].value) + matchObj.quantity
+//                 }
+//             })
+            
+//             recordSorts.push({
+//                 "id": sort.$id.value,
+//                 "record": {
+//                     [APP_SORT_FIELD_SUBTABLE]: sort[APP_SORT_FIELD_SUBTABLE]
+//                 }
+//             })
+//         })
+//         const reqUpdateSort = {
+//             "app": appSortId,
+//             "records": recordSorts
+//         }
+//         try {
+//             await kintone.api(kintone.api.url('/k/v1/records.json', true), 'PUT', reqUpdateSort)
+//         } catch (error) {
+//             console.log(error)
+//             alert('Error: ' + error.message)
+//         }
+        
+//         return event
+//     });
+
+//     function calculateOneRow(row) {
+//         const record = kintone.app.record.get().record;
+//         let productCode = row.value[FIELD_PRODUCT_CODE].value
+//         let orderQuantity = Number(row.value[FIELD_ORDER_QUANTITY].value)
+
+//         let stockQuantity = 0
+//         let sortQuantity = 0
+//         let remainQuantity = orderQuantity
+
+//         // Clear Product
+//         if (!productCode) {
+//             // No product -> clear quantity
+//             populateNumber(row, 0, 0, 0, remainQuantity)
+
+//             // Clear object remark
+//             row.value[FIELD_REMARK].value = ''
+//         }
+
+//         tmpObjRemark = {
+//             "productCode": productCode,
+//             "stock": [],
+//             "sort": []
+//         }
+
+//         for (let i = 0; i < selectedStocks.length; i++) {
+//             if (selectedStocks[i][APP_STOCK_FIELD_PRODUCT_CODE].value == productCode) {
+//                 selectedStocks.splice(i, 1)
+//                 break
+//             }
+//         }
+//         let selectedStock = structuredClone(stocks.find(stock => stock[APP_STOCK_FIELD_PRODUCT_CODE].value == productCode))
+//         let currentStockQuantity = Number(selectedStock?.[APP_STOCK_FIELD_CURRENT_QUANTITY]?.value || 0);
+
+//         /**
+//         * Only pick product in Stock
+//         */
+//         if (selectedStock && currentStockQuantity > 0 && currentStockQuantity >= orderQuantity ) {
+//             stockQuantity = orderQuantity
+//             sortQuantity = 0
+//             remainQuantity = 0
+//             populateNumber(row, stockQuantity, sortQuantity, stockQuantity + sortQuantity, remainQuantity)
+
+//             selectedStock = calculateStock(selectedStock, orderQuantity, record[FIELD_SHIP_DATE].value)
+//             selectedStocks.push(selectedStock)
+
+//             row.value[FIELD_REMARK].value = JSON.stringify(tmpObjRemark)
+//             return
+//         }
+        
+
+//         /**
+//         * Pick product in both Stock, Sort
+//         */
+//         stockQuantity = currentStockQuantity
+//         remainQuantity = orderQuantity - stockQuantity
+        
+//         if (selectedStock && stockQuantity > 0){
+//           selectedStock = calculateStock(selectedStock, stockQuantity, record[FIELD_SHIP_DATE].value)
+//           selectedStocks.push(selectedStock)
+//         }
+//         // Filter sorts containts product
+//         let validSorts = []
+//         availableSorts.forEach(async sort => {
+//             sort[APP_SORT_FIELD_SUBTABLE].value.forEach(async row => {
+//                 if (row.value[APP_SORT_FIELD_PRODUCT].value == productCode && row.value[APP_SORT_FIELD_QUANTITY].value > 0) {
+//                     let existedSort = selectedSorts.find(selectedSort => selectedSort.$id.value == sort.$id.value)
+//                     if (existedSort) {
+//                         // Restore Sort quantity of this product
+//                         existedSort[APP_SORT_FIELD_SUBTABLE].value.forEach(async existedSortRow => {
+//                             if (existedSortRow.value[APP_SORT_FIELD_PRODUCT].value == productCode) {
+//                                 existedSortRow.value[APP_SORT_FIELD_QUANTITY].value = row.value[APP_SORT_FIELD_QUANTITY].value
+//                             }
+//                         })
+//                         validSorts.push(existedSort)
+//                     } else {
+//                         validSorts.push(structuredClone(sort))
+//                     }
+//                 }
+//             })
+//         })
+
+//         // Get item in valid sorts
+//         validSorts.forEach(async sort => {
+//             if (remainQuantity == 0) {
+//                 return
+//             }
+//             let existedSort = selectedSorts.find(selectedSort => selectedSort.$id.value == sort.$id.value)
+//             if (existedSort) {
+//                 sort = existedSort
+//             }
+//             let rows = sort[APP_SORT_FIELD_SUBTABLE].value
+//             for (let i = 0; i < rows.length; i++) {
+//                 let row = rows[i]
+//                 if (row.value[APP_SORT_FIELD_PRODUCT].value == productCode) {
+//                     let productQuantity = row.value[APP_SORT_FIELD_QUANTITY]
+
+//                     if (productQuantity.value > remainQuantity) {
+//                         // Add this Sort to tmpObjRemark
+//                         tmpObjRemark.sort.push({
+//                             "id": sort.$id.value,
+//                             "quantity": remainQuantity
+//                         })
+
+//                         productQuantity.value -= remainQuantity
+//                         remainQuantity = 0
+//                     } else {
+//                         // Add this Sort to tmpObjRemark
+//                         tmpObjRemark.sort.push({
+//                             "id": sort.$id.value,
+//                             "quantity": Number(productQuantity.value)
+//                         })
+
+//                         remainQuantity -= productQuantity.value
+//                         productQuantity.value = 0
+//                     }
+
+//                     if (!existedSort) {
+//                         selectedSorts.push(sort)
+//                     }
+//                     break
+//                 }
+//             }
+//         })
+
+
+//         sortQuantity = orderQuantity - stockQuantity - remainQuantity
+//         populateNumber(row, stockQuantity, sortQuantity, stockQuantity + sortQuantity, remainQuantity)
+
+//         row.value[FIELD_REMARK].value = JSON.stringify(tmpObjRemark)
+
+//     }
+
+
+//     function populateNumber(row, stockQuantity, sortQuantity, shipQuantity, remainQuantity) {
+//         row.value[FIELD_STOCK_QUANTITY].value = stockQuantity
+//         row.value[FIELD_SORT_QUANTITY].value = sortQuantity
+//         row.value[FIELD_SHIP_QUANTITY].value = shipQuantity
+//         row.value[FIELD_REMAIN_QUANTITY].value = remainQuantity
+//     }
+
+
+// })(jQuery, kintone.$PLUGIN_ID);

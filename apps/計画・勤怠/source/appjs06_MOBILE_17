@@ -1,0 +1,421 @@
+/* 
+  mf-agri-services 
+*/ 
+(() => {
+  const WORK_APP_ID = kintone.mobile.app.getId();
+  const USER_EMPLOYEE_GROUP = 12;
+  const USER_ADMIN_GROUP = 13;
+  const USER_DEV_GROUP = 14;
+  
+  const WORK_STATUS_FIELD_CODE = '作業ステータス';
+  const WORK_STATUS_NOT_START = '未対応';
+  const WORK_STATUS_PROCESSING = '処理中';
+  const WORK_STATUS_COMPLETED = '完了';
+  const WORK_STATUS_ABNORMAL = '異常';
+  
+  const CREATOR_TYPE_FIELD_CODE = "作成者区分";
+  const CREATOR_FIELD_CODE = '作成者';
+  const EMAIL_ADDRESS_FIELD_CODE= 'メールアドレス';
+  const EMPLOYEE_ID_FIELD_CODE = '社員コード';
+  const EMPLOYEE_NAME_FIELD_CODE = '作業者名';
+  const PLAN_DATE_FIELD_CODE = '予定日';
+  const PLAN_START_DATE_TIME_FIELD_CODE = '計画_開始時刻';
+  const PLAN_END_DATE_TIME_FIELD_CODE = '計画_終了時刻';
+  const WORK_MASTER_ID_FIELD_CODE = '作業コード';
+  const WORK_MASTER_NAME_FIELD_CODE = '作業名';
+  const REMASK_FIELD_CODE = '備考';
+  const PERFORMANCE_UNIT_FIELD_CODE = '実績単位';
+  const CROP_FIELD_CODE = '作付_SharePointID';
+  const FIELD_FIELD_CODE = '圃場_SharePointID';
+  const WORK_FIELD_CODE = '作業_SharePointID';
+  const SECTION_FIELD_CODE = '区画';
+  const TOTAL_COLUMNS_FIELD_CODE = '列数';
+  const ACTUAL_COLUMN_FIELD_CODE = '区画_実績';
+  const VARIETY_FIELD_CODE = '品種';
+  
+  const ACTUAL_EMPLOYEE_ID_FIELD_CODE = '実際_社員コード';
+  const ACTUAL_EMAIL_ADDRESS_FIELD_CODE = '実際_メールアドレス';
+  const ACTUAL_DATE_FIELD_CODE = '作業日';
+  const ACTUAL_START_DATE_TIME_FIELD_CODE = '実績_開始時刻';
+  const ACTUAL_END_DATE_TIME_FIELD_CODE = '実績_終了時刻';
+  const BREAK_TIME_FIELD_CODE = '休憩履歴';
+  const TIME_SPENT_FIELD_CODE = '作業時間';
+  const BREAK_TIME_NAME = '休憩名';
+  const BREAK_TIME_START_TIME = '休憩開始';
+  const BREAK_TIME_END_TIME = '休憩終了';
+  const PERFORMANCE_QUANTITY_FIELD_CODE = '実績数';
+  const TARGET_NOTI_FIELD_CODE = '対象通知';
+  const NOTI_CONTENT_FIELD_CODE = '通知内容';
+  
+  window.MF_AGRI_SERVICES = {
+    BREAK_TIME_SERVICES: {
+      getListBreakTime: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: BREAK_TIME_APP_ID, size: 500});
+      }
+    },
+    WORK_SERVICES: {
+      getListWorks: async ({
+        fieldSearch,
+        userSearch,
+        userActualSearch,
+        workSearch,
+        cropSearch,
+        planStartDateTime,
+        planEndDateTime,
+        actualStartDateTime,
+        actualEndDateTime,
+        workStatus = []
+      }) => {
+        let arr = [];
+        if (fieldSearch) arr.push(`${FIELD_FIELD_CODE} = "${fieldSearch}"`);
+        // if (userSearch) arr.push(`${EMPLOYEE_ID_FIELD_CODE} = "${userSearch}"`);
+        if (Array.isArray(userSearch) && userSearch.length > 0) {
+          const values = userSearch.map(val => `"${val}"`).join(', ');
+          arr.push(`${EMPLOYEE_ID_FIELD_CODE} in (${values})`);
+        } else if (typeof userSearch === 'string' && userSearch.trim() !== '') {
+          arr.push(`${EMPLOYEE_ID_FIELD_CODE} = "${userSearch}"`);
+        }
+        
+        if (Array.isArray(userActualSearch) && userActualSearch.length > 0) {
+          const values = userActualSearch.map(val => `"${val}"`).join(', ');
+          arr.push(`${ACTUAL_EMPLOYEE_ID_FIELD_CODE} in (${values})`);
+        } else if (typeof userActualSearch === 'string' && userActualSearch.trim() !== '') {
+          arr.push(`${ACTUAL_EMPLOYEE_ID_FIELD_CODE} = "${userActualSearch}"`);
+        }
+        
+        if (workSearch) arr.push(`${WORK_MASTER_ID_FIELD_CODE} = "${workSearch}"`);
+        if (cropSearch) arr.push(`${CROP_FIELD_CODE} = "${cropSearch}"`);
+        if (planStartDateTime) arr.push(`${PLAN_DATE_FIELD_CODE} >= "${moment(planStartDateTime).format('YYYY-MM-DD')}" and ${PLAN_START_DATE_TIME_FIELD_CODE} >= "${moment(planStartDateTime).format('HH:mm')}"`);
+        if (planEndDateTime) arr.push(`${PLAN_DATE_FIELD_CODE} <= "${moment(planEndDateTime).format('YYYY-MM-DD')}" and ${PLAN_END_DATE_TIME_FIELD_CODE} <= "${moment(planEndDateTime).format('HH:mm')}"`);
+        if (actualStartDateTime) arr.push(`${ACTUAL_DATE_FIELD_CODE} >= "${moment(actualStartDateTime).format('YYYY-MM-DD')}" and ${ACTUAL_START_DATE_TIME_FIELD_CODE} >= "${moment(actualStartDateTime).format('HH:mm')}"`)
+        if (actualEndDateTime) arr.push(`${ACTUAL_DATE_FIELD_CODE} <= "${moment(actualEndDateTime).format('YYYY-MM-DD')}" and ${ACTUAL_END_DATE_TIME_FIELD_CODE} <= "${moment(actualEndDateTime).format('HH:mm')}"`);
+        if (workStatus && workStatus.length > 0) {
+          let tmp = "";
+          for (const [index, item] of workStatus.entries()){
+            if (index == workStatus.length - 1){
+              tmp += `"${item}"`;  
+            }
+            else tmp += `"${item}", `;  
+          }
+          arr.push(`${WORK_STATUS_FIELD_CODE} in (${tmp})`)
+        }
+        const query = arr.join(' and ');
+        console.log('query', query);
+        return MF_KINTONE_SERVICES.getAllRecords({app: WORK_APP_ID, query: query, size: 500});        
+      },
+      getWorkById: async (recordId) => {
+        return MF_KINTONE_SERVICES.getRecord({app: WORK_APP_ID, id: recordId});
+      },
+      addBreakTime: async (recordId, breakTimeName, breakTimeDuration) => {
+        const record = await MF_AGRI_SERVICES.WORK_SERVICES.getWorkById(recordId);
+        const recordUpdate = {};
+        if (record['休憩履歴'].value.length == 1 && !record['休憩履歴'].value[0].value['休憩名'].value){
+          recordUpdate['休憩履歴'] = {value: []};
+        }
+        else recordUpdate['休憩履歴'] = record['休憩履歴']
+        recordUpdate['休憩履歴'].value.push({
+          value: {
+            '休憩名': {value: breakTimeName}, 
+            '休憩時間': {value: breakTimeDuration == "00:00" ? "00:01" : breakTimeDuration}
+          }
+        })
+        const formData = {
+          app: WORK_APP_ID,
+          id: recordId,
+          record: recordUpdate
+        }
+        return MF_KINTONE_SERVICES.updateRecord(formData);
+      },
+      updateWorkById: async (recordId, {actualEmail, actualDate, actualStartTime, actualEndTime, breakTime , workStatus, sectionName, listColumns, actualColumn, workOn}) => {
+        const currentRecord = await MF_KINTONE_SERVICES.getRecord({app: WORK_APP_ID, id: recordId});
+        const record = {};
+        if (actualEmail){
+          record['実際_メールアドレス'] = {
+            value: actualEmail
+          }
+        }
+        if (actualDate){
+          record['作業日'] = {
+            value: actualDate
+          }
+        }
+        if (actualStartTime){
+          record['実績_開始時刻'] = {
+            value: actualStartTime
+          }
+        }
+        if (actualEndTime){
+          record['実績_終了時刻'] = {
+            value: actualEndTime
+          }
+        }
+        if (sectionName){
+          record['区画'] = {
+            value: sectionName
+          }
+        }
+        if (workOn){
+          record['集計単位'] = {
+            value: workOn
+          }
+        }
+        if (actualColumn){
+          record[ACTUAL_COLUMN_FIELD_CODE] = {
+            value: actualColumn
+          }
+        }
+        if (listColumns && Array.isArray(listColumns)){
+          if (listColumns.length == 0){
+            record['列詳細'] = {
+              value: [{
+                  "value": {"列名": {
+                      value: undefined
+                  }  
+                }
+              }]
+            };
+          }
+          else {
+            if (workOn == '区画'){
+              record['列詳細'] = {value: []}
+            }
+            else {
+              record['列詳細'] = {
+                value: listColumns.map(o => ({
+                  "value": {
+                    "列名": {
+                      value: o?.['列名']
+                    },
+                    "列作業時間": {
+                      value: o?.['列作業時間']
+                    },
+                    "列_実績": {
+                      value: o?.['列_実績']
+                    }
+                  }
+                }))
+              }
+            }
+          }
+        }
+        if (breakTime && Array.isArray(breakTime)) {
+          if (breakTime.length == 0){
+            record['休憩履歴'] = {
+              value: [{
+                  "value": {"休憩名": {
+                      value: ''
+                  }  
+                }
+              }]
+            };
+          }
+          else {
+            record['休憩履歴'] = {
+              value: breakTime.map(o => ({
+                  "value": {
+                    "休憩名": {
+                      value: o?.['休憩名'],
+                    },
+                    "休憩時間": {
+                      value: o?.['休憩時間']
+                    }
+                }
+              }))
+            }
+          }
+        }
+        
+        if (workStatus){
+          record['作業ステータス'] = {
+            value: workStatus
+          }
+        }
+        
+        if (currentRecord[CREATOR_FIELD_CODE].value.code == currentRecord[EMAIL_ADDRESS_FIELD_CODE]?.value){
+          if (actualStartTime){
+            record[PLAN_START_DATE_TIME_FIELD_CODE] = {
+              value: actualStartTime
+            }
+          }
+          if (actualEndTime){
+            record[PLAN_END_DATE_TIME_FIELD_CODE] = {
+              value: actualEndTime
+            }
+          }  
+        }
+        
+        const formData = {
+          app: WORK_APP_ID,
+          id: recordId,
+          record: record
+        }
+        return MF_KINTONE_SERVICES.updateRecord(formData);
+      },
+      removeWorkById: async (recordId) => {
+        return MF_KINTONE_SERVICES.deleteRecords(WORK_APP_ID, [recordId])
+      },
+      addWork: async ({
+        assignee, actualEmail, fieldId, cropId, sectionName, workId, planDate, planStartTime, planEndTime, actualDate, actualStartTime, actualEndTime, listBreakTime, listColumns, actualColumn, totalColumns, workOn, workStatus, creatorType
+      }) => {
+        const body = {
+          "app": WORK_APP_ID,
+          "record": {
+            
+          }
+        }
+        body["record"][CREATOR_TYPE_FIELD_CODE] = {
+          value: creatorType
+        }
+        if (actualEmail){
+          body["record"][ACTUAL_EMAIL_ADDRESS_FIELD_CODE] = {
+            value: actualEmail
+          }
+        }
+        if (workStatus){
+          body["record"][WORK_STATUS_FIELD_CODE] = {
+            value: workStatus
+          }
+        }
+        if (fieldId){
+          body["record"][EMAIL_ADDRESS_FIELD_CODE] = {
+            value: assignee
+          }
+        }
+        if (fieldId){
+          body["record"][FIELD_FIELD_CODE] = {
+            value: fieldId
+          }
+        }
+        if (cropId){
+          body["record"][CROP_FIELD_CODE] = {
+            value: cropId
+          }
+        }
+        if (sectionName){
+          body["record"][SECTION_FIELD_CODE] = {
+            value: sectionName
+          }
+        }
+        if (actualColumn){
+          body["record"][ACTUAL_COLUMN_FIELD_CODE] = {
+            value: actualColumn
+          }
+        }
+        if (workOn){
+          body["record"]['集計単位'] = {
+            value: workOn
+          }
+        }
+        if (workId){
+          body["record"][WORK_FIELD_CODE] = {
+            value: workId
+          }
+        }
+        if (planDate){
+          body["record"][PLAN_DATE_FIELD_CODE] = {
+            value: planDate
+          }
+        }
+        if (planStartTime){
+          body["record"][PLAN_START_DATE_TIME_FIELD_CODE] = {
+            value: planStartTime
+          }
+        }
+        if (planEndTime){
+          body["record"][PLAN_END_DATE_TIME_FIELD_CODE] = {
+            value: planEndTime
+          }
+        }
+        if (actualDate){
+          body["record"][ACTUAL_DATE_FIELD_CODE] = {
+            value: actualDate
+          }
+        }
+        if (actualStartTime){
+          body["record"][ACTUAL_START_DATE_TIME_FIELD_CODE] = {
+            value: actualStartTime
+          }
+        }
+        if (actualEndTime){
+          body["record"][ACTUAL_END_DATE_TIME_FIELD_CODE] = {
+            value: actualEndTime
+          }
+        }
+        if (!listBreakTime || listBreakTime.length === 0) {
+          listBreakTime = [{
+            '休憩名': '',
+            '休憩時間': ""
+          }];
+        }
+        
+        body["record"][BREAK_TIME_FIELD_CODE] = {
+          value: listBreakTime.map(item => ({
+            value: {
+              "休憩名": { value: item['休憩名'] },
+              "休憩時間": { value: item['休憩時間'] }
+            }
+          }))
+        };
+        if (listColumns){
+          body["record"]["列詳細"] = {
+            value: listColumns.map(item => ({
+              value: {
+                "列名": { value: item['列名'] },
+                "列作業時間": { value: item['列作業時間'] },
+                "列_実績": { value: item['列_実績'] }
+              }
+            }))
+          }
+        }
+        if (totalColumns){
+          body["record"][TOTAL_COLUMNS_FIELD_CODE] = {
+            value: totalColumns
+          }
+        }
+        console.log('body', body);
+        return MF_KINTONE_SERVICES.addRecord(body);
+      }
+    },
+    USER_MASTER_SERVICES: {
+      getListUsers: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: USER_MASTER_APP_ID, size: 500});  
+      },
+      getUserPermissions: async (userCode) => {
+        const userGroups = (await MF_KINTONE_SERVICES.getUserGroups(userCode)).groups.map(o => +o.id);
+        return {
+          'PLAN_WORK': {
+            'VIEW': true,
+            'ADD': userGroups.includes(USER_ADMIN_GROUP) || userGroups.includes(USER_DEV_GROUP) ? true : false,
+            'EDIT': userGroups.includes(USER_ADMIN_GROUP) || userGroups.includes(USER_DEV_GROUP) ? true : false,
+            'DELETE': userGroups.includes(USER_ADMIN_GROUP) || userGroups.includes(USER_DEV_GROUP) ? true : false
+          },
+          'ACTUAL_WORK': {
+            'VIEW': true,
+            'ADD': true,
+            'EDIT': true,
+            'DELETE': true,
+            'OWNER_ONLY': (!userGroups.includes(USER_ADMIN_GROUP) && !userGroups.includes(USER_DEV_GROUP) && userGroups.includes(USER_EMPLOYEE_GROUP)) ? true : false
+          }
+        }
+      }
+    },
+    WORK_MASTER_SERVICES: {
+      getListWorks: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: WORK_MASTER_APP_ID, size: 500});  
+      }
+    },
+    FIELD_MASTER_SERVICES: {
+      getListFields: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: FIELD_MASTER_APP_ID, size: 500});  
+      },
+      getFieldById: async (recordId) => {
+        return MF_KINTONE_SERVICES.getRecord({app: FIELD_MASTER_APP_ID, id: recordId});
+      }
+    },
+    CROP_MASTER_SERVICES: {
+      getListCrops: async () => {
+        return MF_KINTONE_SERVICES.getAllRecords({app: CROP_MASTER_APP_ID, size: 500});  
+      }
+    }
+  }
+})();

@@ -1,0 +1,91 @@
+(($) => {
+  'use strict';
+  const INTEGER_ERROR = '整数を入力してください。';
+  const FORM_DATA = cybozu.data.page['FORM_DATA'];
+  const ELEMENT_FIELD_ID = {};
+  const fieldList = FORM_DATA.schema.table.fieldList;
+  for (const fieldId of Object.keys(fieldList)) {
+    ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+  }
+  for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+    ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+    const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+  }
+  kintone.events.on([
+    'app.record.create.submit',
+    'app.record.edit.submit',
+    'mobile.app.record.create.submit',
+    'mobile.app.record.edit.submit',
+  ], (event) => {
+    $('.error-cybozu-customize').remove();
+    const record = event.record;
+    const table = record['詳細'].value;
+    for (const [index, item] of table.entries()){
+      const row = item.value;
+      if (row['列数'].value && !Number.isInteger(+row['列数'].value)){
+        $(`.value-${ELEMENT_FIELD_ID['列数']}`).eq(index).append(`<div class="input-error-cybozu control-errors-content-gaia error-cybozu-customize">${INTEGER_ERROR}</div>`);
+        return false;
+      }
+      if (row['株数'].value && !Number.isInteger(+row['株数'].value)){
+        $(`.value-${ELEMENT_FIELD_ID['株数']}`).eq(index).append(`<div class="input-error-cybozu control-errors-content-gaia error-cybozu-customize">${INTEGER_ERROR}</div>`);
+        return false;
+      }
+      let agriColumns = [];
+
+      $('.agri-list-column').eq(index).find('input').each(function() {
+        if ($(this).val()){
+          agriColumns.push($(this).val());
+        }
+      });
+      
+      row['列名一覧'].value = agriColumns.join(';');
+      
+    }
+    return event;
+  });
+  kintone.events.on([
+    'app.record.create.show',
+    'app.record.edit.show'
+  ], (event) => {
+    $('.agri-list-column').remove();
+    setInterval(() => {
+      const record = kintone.app.record.get().record;
+      const table = record['詳細'].value;
+      for (const [index, item] of table.entries()){
+        const row = item.value;
+        $(`.value-${ELEMENT_FIELD_ID['列名一覧']}`).eq(index).hide();
+        if ($(`.field-${ELEMENT_FIELD_ID['列名一覧']}`).eq(index).find('.agri-list-column').length > 0) continue;
+        const divContainer = $('<div class="agri-list-column"></div>');
+        $(`.field-${ELEMENT_FIELD_ID['列名一覧']}`).eq(index).append(divContainer);
+        
+        const btnAddColumn = $('<button style="background-color: #4CAF50; color: white; padding: 2px 10px; border: none; border-radius: 5px; cursor: pointer;">列を追加</button>');
+        divContainer.append(btnAddColumn, '<br/>');
+        btnAddColumn.on('click', function(){
+          const btnRemove = $('<button style="background-color: #e74c3c; color: white; width: 50px; height: 30px; margin-left: 5px; border: none; border-radius: 5px; cursor: pointer;">削除</button>');
+          const rowContainer = $(`<div style="display: flex; margin-top: 5px"></div>)`).append('<input class="input-text-cybozu" style="height: 30px;"></input>', btnRemove);
+          divContainer.append(rowContainer);
+          btnRemove.on('click', function(){
+            rowContainer.remove();
+          })
+        });
+        
+        if (row['列名一覧'].value){
+          for (const col of row['列名一覧'].value?.trim()?.split(';')){
+            const btnRemove = $('<button style="background-color: #e74c3c; color: white; width: 50px; height: 30px; margin-left: 5px; border: none; border-radius: 5px; cursor: pointer;">削除</button>');
+            const rowContainer = $(`<div style="display: flex; margin-top: 5px"></div>)`).append(`<input class="input-text-cybozu" style="height: 30px;" value="${col}"></input>`, btnRemove);
+            divContainer.append(rowContainer);
+            btnRemove.on('click', function(){
+              rowContainer.remove();
+            })
+          }
+        }
+      }
+      
+    }, 100);
+    
+    return event;
+  });
+})(jQuery);

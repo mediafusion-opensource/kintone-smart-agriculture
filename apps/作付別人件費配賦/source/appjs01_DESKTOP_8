@@ -1,0 +1,522 @@
+(($) => {
+  const APP_ID = kintone.app.getId();
+  function replacer(key, value) {
+    if (value === undefined) {
+      return null;
+    }
+    return value;
+  }
+  const lang = kintone.getLoginUser()?.['language'] || 'en';
+  const locales = window.MF_AGRI_COST_BY_CROPPING_LANGUAGES[lang];
+  window.MF_AGRI_COST_BY_CROPPING = {
+
+    async createCursor(body) {
+      // auto get 500 records
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/records/cursor', true), 'POST', body, function (resp) {
+          // success
+          resolve(resp);
+        }, function (error) {
+          // error
+          reject(error);
+        });
+      });
+    },
+    deleteCursor(cursorId) {
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/records/cursor', true), 'DELETE', { id: cursorId }, function (resp) {
+          // success
+          resolve(resp);
+        }, function (error) {
+          // error
+          reject(error);
+        });
+      });
+    },
+    async getAllRecordsUsingCursorWithQuery(appId, query) {
+      const records = [];
+      let cursorId = null;
+      let isCursorActive = true;
+      while (isCursorActive) {
+        try {
+          let params = {
+            'app': appId,
+            'size': 100,
+            'query': query
+          };
+
+          if (cursorId) {
+            params['cursor'] = cursorId;
+          }
+
+          const response = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', params);
+
+          records.push(...response.records);
+
+          if (response.nextCursor) {
+            cursorId = response.nextCursor;
+          } else {
+            isCursorActive = false;
+          }
+
+        } catch (error) {
+          console.error('Error while fetching records using cursor with query:', error);
+          break;
+        }
+      }
+
+      return records;
+    },
+
+    async getRecordByCursor(cursor) {
+      var body = {
+        'id': cursor.id
+      };
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/records/cursor', true), 'GET', body, function (resp) {
+          // success
+          let records = resp.records;
+          if (resp.next) {
+            resolve(getRecordByCursor(cursor)
+              .then(nextRecords => records.concat(nextRecords)).catch(e => {
+                console.error(e);
+              }));
+          }
+          resolve(records);
+        }, function (error) {
+          // error
+          reject(error);
+        });
+      })
+    },
+    async getAllRecordsFromKintone(body) {
+      try {
+        // create cursor
+        const cursor = await MF_AGRI_COST_BY_CROPPING.createCursor(body);
+        // fetch all data
+        let allRecords = await MF_AGRI_COST_BY_CROPPING.getRecordByCursor(cursor);
+        // delete cursor
+        // await deleteCursor(cursor.id);
+        return {
+          status_code: "200",
+          data: allRecords
+        }
+      }
+      catch (e) {
+        let status_code = "500";
+        if (e.code === 'CB_NO02') status_code = "403";
+        return {
+          status_code: status_code
+        }
+        console.error(e);
+      }
+    },
+    updateClientIdAndClientSecret() {
+      // <div class="modal-header">
+      //     <h5 class="modal-title" id="credentialsModalLabel">Client ID and Client Secret</h5>
+      //     <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+      //         <span aria-hidden="true">&times;</span>
+      //     </button>
+      // </div>
+      const modal = $(`<div class="modal fade" id="credentialsModal" tabindex="-1" role="dialog" aria-labelledby="credentialsModalLabel" aria-hidden="true">
+            <div class="modal-dialog" role="document">
+                <div class="modal-content">
+                  <div class="modal-body">
+                    <div class="form-group">
+                        <label for="clientId" class="required">Client ID</label>
+                        <input type="text" class="form-control" id="clientId">
+                        <small id="clientId-error" style="color: red"></small>
+                    </div>
+                    <div class="form-group">
+                        <label for="clientSecret" class="required">Client Secret</label>
+                        <input type="password" class="form-control" id="clientSecret" autocomplete="new-password">
+                        <small id="clientSecret-error" style="color: red"></small>
+                    </div>
+                    <div class="form-group">
+                      <div id="credentialsDesc" style="color: red"></div>
+                    </div>
+                  </div>
+                  
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">${locales['CANCEL']}</button>
+                    <button type="button" class="btn btn-primary" id="save-credential">${locales['SAVE']}</button>
+                  </div>
+                </div>
+            </div>
+          </div>`);
+      $('body').append(modal);
+      $('#credentialsDesc').text(locales['CLIENT_ID_AND_CLIENT_SECRET_DES']);
+      $('#credentialsModal').modal('show');
+      const clientId = localStorage.getItem('freee_client_id');
+      const clientSecret = localStorage.getItem('freee_client_secret');
+      $("#clientId").val(clientId);
+      $("#clientSecret").val(clientSecret);
+      $('#credentialsModal').on('hidden.bs.modal', function () {
+        $(this).remove();
+      });
+      $('#save-credential').on('click', function () {
+        $('#clientId-error, #clientSecret-error').text('')
+        const clientId = $("#clientId").val();
+        const clientSecret = $("#clientSecret").val();
+        if (!clientId) {
+          $('#clientId-error').text(locales['REQUIRED']);
+          return;
+        }
+        if (!clientSecret) {
+          $('#clientSecret-error').text(locales['REQUIRED']);
+          return;
+        }
+        localStorage.setItem('freee_client_id', clientId);
+        localStorage.setItem('freee_client_secret', clientSecret);
+        $('#credentialsModal').modal('hide');
+        // alert('UPDATE_CREDENTIAL_SUCCESS');
+      });
+    },
+    async getToken() {
+      const record = kintone.app.record.get()?.record;
+      const clientId = localStorage.getItem('freee_client_id');
+      const clientSecret = localStorage.getItem('freee_client_secret');
+      if (!clientId || !clientSecret) {
+        MF_AGRI_COST_BY_CROPPING.updateClientIdAndClientSecret();
+        return false;
+      }
+      localStorage.setItem('freee_last_record', JSON.stringify(record, replacer));
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code') || localStorage.getItem('freee_code');
+      let result;
+      const url = 'https://accounts.secure.freee.co.jp/public_api/token';
+      const header = {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+      const method = 'POST';
+      let body = new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: clientId,
+        client_secret: clientSecret,
+        code: code,
+        redirect_uri: `${window.location.origin}/k/${APP_ID}/edit`
+      }).toString();
+
+      if (code) {
+        result = (await MF_AGRI_COST_BY_CROPPING.proxyRequest(url, method, header, body)).data;
+      }
+
+      if (result && !result['error']) {
+        localStorage.setItem('freee_access_token', result['access_token']);
+        localStorage.setItem('freee_refresh_token', result['refresh_token']);
+        localStorage.setItem('freee_company_id', result['company_id']);
+        return true;
+      } else {
+        const refresh_token = localStorage.getItem('freee_refresh_token');
+        if (refresh_token && 'undefined' !== refresh_token) {
+          body = new URLSearchParams({
+            grant_type: 'refresh_token',
+            client_id: clientId,
+            client_secret: clientSecret,
+            refresh_token: refresh_token,
+          }).toString();
+
+          result = (await MF_AGRI_COST_BY_CROPPING.proxyRequest(url, method, header, body)).data;
+
+          if (!result['error']) {
+            localStorage.setItem('freee_access_token', result['access_token']);
+            localStorage.setItem('freee_refresh_token', result['refresh_token']);
+            localStorage.setItem('freee_company_id', result['company_id']);
+            return true;
+          } else {
+            MF_AGRI_COST_BY_CROPPING.getCodeFromFreee(clientId);
+            return false;
+          }
+
+        } else {
+          MF_AGRI_COST_BY_CROPPING.getCodeFromFreee(clientId);
+          return false;
+        }
+      }
+
+    },
+
+    async getSalaryOrBonusOfUserFreee(type, employeeId, year, month) {
+      const url = `https://api.freee.co.jp/hr/api/v1/${type}/employee_payroll_statements/${employeeId}?company_id=${localStorage.getItem('freee_company_id')}&year=${year}&month=${month}`;
+      const header = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${localStorage.getItem('freee_access_token')}`
+      }
+      const dataExpected = {
+        status_code: "200"
+      }
+      const method = 'GET';
+      const body = new URLSearchParams({}).toString();
+
+      const response = await MF_AGRI_COST_BY_CROPPING.proxyRequest(url, method, header, body);
+      if (response.status_code == "400") {
+        dataExpected.status_code = "400";
+      }
+      else if (response.status_code === "404") {
+        dataExpected.status_code = "404";
+      }
+      else if (response.status_code === "500") {
+        dataExpected.status_code = "500";
+      }
+      else if (response.status_code === '401') {
+        await MF_AGRI_COST_BY_CROPPING.getToken();
+        dataExpected.status_code = "401";
+      }
+
+      const dataFreee = response.data['employee_payroll_statement'];
+      dataExpected['dataFreee'] = dataFreee;
+      return dataExpected;
+    },
+
+    async proxyRequest(apiUrl, method, headers = {}, body = {}) {
+      try {
+        const args = await kintone.proxy(apiUrl, method, headers, body);
+        return {
+          status_code: args[1].toString(),
+          data: JSON.parse(args[0])
+        }
+      } catch (error) {
+        console.log(error);
+        return 'Error';
+      }
+    },
+
+    getCodeFromFreee(clientId) {
+      const authorizationEndpoint = 'https://accounts.secure.freee.co.jp/public_api/authorize';
+      const params = new URLSearchParams({
+        client_id: clientId,
+        response_type: 'code',
+        redirect_uri: `${window.location.origin}/k/${APP_ID}/edit`,
+        prompt: 'select_company'
+      });
+
+      window.location.href = `${authorizationEndpoint}?${params.toString()}`;
+    },
+
+    async fetchAllEmployees(year, month, with_no_payroll_calculation = true) {
+
+      const token = localStorage.getItem('freee_access_token');
+      const companyId = localStorage.getItem('freee_company_id');
+      const dataExpected = {
+        status_code: "200"
+      }
+      const limit = 100;
+      let offset = 0;
+      let employees = [];
+      let moreData = true;
+
+      while (moreData) {
+        const url = `https://api.freee.co.jp/hr/api/v1/employees?company_id=${companyId}&year=${year}&month=${month}&limit=${limit}&offset=${offset}&with_no_payroll_calculation=${with_no_payroll_calculation}`;
+
+        const response = await MF_AGRI_COST_BY_CROPPING.proxyRequest(url, 'GET', {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+        );
+        if (response.status_code == "400") {
+          dataExpected.status_code = "400";
+          break;
+        }
+        else if (response.status_code === "403") {
+          dataExpected.status_code = "403";
+          break;
+        }
+        else if (response.status_code === "500") {
+          dataExpected.status_code = "500";
+          break;
+        }
+        else if (response.status_code === "401") {
+          await MF_AGRI_COST_BY_CROPPING.getToken();
+          dataExpected.status_code = "401";
+          break;
+        }
+        employees = employees.concat(response.data.employees);
+
+        if (response.data.employees.length < limit) {
+          moreData = false;
+        } else {
+          offset += limit;
+        }
+      }
+      dataExpected['employees'] = employees;
+      return dataExpected;
+    },
+    async uploadFileToKintone(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          reject(new Error('No file provided for upload.'));
+          return;
+        }
+
+        // Tạo FormData để gửi tệp
+        const formData = new FormData();
+        formData.append('__REQUEST_TOKEN__', kintone.getRequestToken());
+        formData.append('file', file, file.name);
+
+        // Gửi yêu cầu tới API /k/v1/file
+        const url = '/k/v1/file.json';
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        xhr.onload = function () {
+          if (xhr.status === 200) {
+            try {
+              const response = JSON.parse(xhr.responseText);
+              resolve(response.fileKey); // Trả về fileKey
+            } catch (error) {
+              reject(new Error('Failed to parse response: ' + error.message));
+            }
+          } else {
+            try {
+              const errorResponse = JSON.parse(xhr.responseText);
+              reject(new Error('Error uploading file: ' + errorResponse.message));
+            } catch {
+              reject(new Error('Error uploading file: Unknown error.'));
+            }
+          }
+        };
+
+        xhr.onerror = function () {
+          reject(new Error('Network error occurred while uploading the file.'));
+        };
+
+        xhr.send(formData); // Gửi FormData chứa file
+      });
+    },
+    async getRecord(appId, recordId) {
+      return new Promise((resolve, reject) => {
+        if (!recordId) {
+          reject(new Error('Record ID is required.'));
+          return;
+        }
+
+        if (!appId) {
+          reject(new Error('App ID is required.'));
+          return;
+        }
+
+        const body = {
+          app: appId,
+          id: recordId,
+        };
+
+        kintone.api(kintone.api.url('/k/v1/record.json', true), 'GET', body,
+          function (resp) {
+            // Thành công: Trả về dữ liệu bản ghi
+            resolve(resp.record);
+          },
+          function (error) {
+            // Lỗi: Trả về thông báo lỗi
+            reject(new Error('Error fetching record: ' + JSON.stringify(error)));
+          }
+        );
+      });
+    },
+    async getFileContent(fileKey) {
+      return new Promise((resolve, reject) => {
+        if (!fileKey) {
+          reject(new Error('FileKey is required.'));
+          return;
+        }
+
+        const url = `/k/v1/file.json?fileKey=${fileKey}`;
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest'); // Thêm Header cần thiết
+        xhr.responseType = 'blob'; // Đặt kiểu trả về là Blob
+
+        xhr.onload = function () {
+          if (xhr.status === 200) {
+            resolve(xhr.response); // Trả về Blob nếu thành công
+          } else {
+            reject(new Error('Failed to fetch file content. Status: ' + xhr.status));
+          }
+        };
+
+        xhr.onerror = function () {
+          reject(new Error('Network error occurred while fetching file content.'));
+        };
+
+        xhr.send();
+      });
+    },
+    async updateCSVFieldWithQuery(appId, query, fileContentSalary, fileContentBonus) {
+      try {
+        const params = {
+          'app': appId,
+          'query': query,
+          'size': 500
+        };
+
+        const response = await kintone.api(kintone.api.url('/k/v1/records', true), 'GET', params);
+        const records = response.records;
+        const recordUpdates = [];
+        for (const record of records) {
+          const recordObj = {};
+          if (fileContentSalary) {
+            const fileKeySalary = await MF_AGRI_COST_BY_CROPPING.uploadFileToKintone(fileContentSalary);
+            recordObj['給料のCSVファイル'] = {
+              value: [
+                { fileKey: fileKeySalary }
+              ]
+            }
+          }
+          else {
+            recordObj['給料のCSVファイル'] = {
+              value: []
+            }
+          }
+          if (fileContentBonus) {
+            const fileKeyBonus = await MF_AGRI_COST_BY_CROPPING.uploadFileToKintone(fileContentBonus);
+            recordObj['賞与のCSVファイル'] = {
+              value: [
+                { fileKey: fileKeyBonus }
+              ]
+            }
+          }
+          else {
+            recordObj['賞与のCSVファイル'] = {
+              value: []
+            }
+          }
+          recordUpdates.push({
+            id: record.$id.value,
+            record: recordObj
+          })
+        }
+
+        const updateResponse = await kintone.api(kintone.api.url('/k/v1/records', true), 'PUT', {
+          'app': appId,
+          'records': recordUpdates
+        });
+
+        console.log('Update successful:', updateResponse);
+
+      } catch (error) {
+        console.error('Error while fetching or updating records:', error);
+      }
+    },
+    async fetchTimesheetByEmployeeAndTime(employeeId, startDate, endDate) {
+      const body = {
+        app: PLAN_WORK_APP_ID,
+        query: `社員コード = "${employeeId}" and 予定日 >= "${moment(startDate).format('YYYY-MM-DD')}" and 予定日 <= "${moment(endDate).format('YYYY-MM-DD')}" and 作業ステータス in ("完了")`,
+        size: 500
+      }
+      const dataExpected = {
+        status_code: "200"
+      };
+      const result = await MF_AGRI_COST_BY_CROPPING.getAllRecordsFromKintone(body);
+      dataExpected['status_code'] = result.status_code;
+
+      if (dataExpected['status_code'] === "200") {
+        // let data = [];
+        // for (const item of result.data){
+        //   data = data.concat(item['作業リスト'].value)
+        // }
+        dataExpected['timesheetData'] = result.data;
+      }
+      return dataExpected;
+    }
+  }
+})(jQuery);

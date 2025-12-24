@@ -1,0 +1,42 @@
+(($) => {
+  'use strict';
+  const POSITIVE_NUMBER_ERROR = '正の数を一つ入力してください。';
+  const FORM_DATA = cybozu.data.page['FORM_DATA'];
+  const ELEMENT_FIELD_ID = {};
+  const fieldList = FORM_DATA.schema.table.fieldList;
+  for (const fieldId of Object.keys(fieldList)) {
+    ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+  }
+  for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+    ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+    const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+  }
+  kintone.events.on([
+    'app.record.index.edit.submit'
+  ], (event) => {
+    $('.error-cybozu-customize').remove();
+    const record = event.record;
+    if (+record['重量'].value <= 0){
+      $(`.value-${ELEMENT_FIELD_ID['重量']} input`).parent().after(`<div class="input-error-cybozu error-cybozu-customize">${POSITIVE_NUMBER_ERROR}</div>`);
+      return false;
+    }
+    return event;
+  });
+  kintone.events.on([
+    'app.record.create.submit',
+    'app.record.edit.submit',
+    'mobile.app.record.create.submit',
+    'mobile.app.record.edit.submit',
+  ], (event) => {
+    $('.error-cybozu-customize').remove();
+    const record = event.record;
+    if (+record['重量'].value <= 0){
+      $(`.value-${ELEMENT_FIELD_ID['重量']}`).append(`<div class="input-error-cybozu control-errors-content-gaia error-cybozu-customize">${POSITIVE_NUMBER_ERROR}</div>`);
+      return false;
+    }
+    return event;
+  });
+})(jQuery);

@@ -1,0 +1,664 @@
+(($) => {
+  'use strict';
+  const MESSAGES = {
+    'ja': {
+      'CONFIRM_DELETE':'削除します。よろしいですか？',
+      'CONFIRM_EDIT': '編集します。よろしいですか？',
+      'BATCH_NUMBER_DUPLICATED': '値が既に存在します。',
+      'BATCH_NUMBER_DOES_NOT_EXIST': '値が存在しません。',
+      'QUANTITY_LESS_THAN_ZERO': '値は 0 未満にすることはできません。',
+      'PLEASE_ENTER_COMPLETE_DATA': '保存できるために、全てのデータを入力する必要があります。',
+      'CANCEL_BATCH' : '廃棄処理',
+      'THE_DISPOSAL_QUANTITY_MUST_NOT_EXCEED_CURRENT_STOCK': '破棄数量は現在の在庫数量以下でなければなりません。',
+    },
+    'en': {
+      'CONFIRM_DELETE':'Are you sure you want to delete?',
+      'CONFIRM_EDIT': 'Are you sure you want to edit?',
+      'BATCH_NUMBER_DUPLICATED': 'The value already exists.',
+      'BATCH_NUMBER_DOES_NOT_EXIST': 'The value does not exist.',
+      'QUANTITY_LESS_THAN_ZERO': 'The value cannot be less than 0.',
+      'PLEASE_ENTER_COMPLETE_DATA': 'Please enter complete data to save.',
+      'CANCEL_BATCH' : 'Cancel Batch',
+      'THE_DISPOSAL_QUANTITY_MUST_NOT_EXCEED_CURRENT_STOCK': 'The disposal quantity must not exceed current stock.'
+    }
+  }
+  const language = kintone.getLoginUser().language || 'en';
+  const locales = MESSAGES[language];
+  const FORM_DATA = cybozu.data.page['FORM_DATA'];
+  const ELEMENT_FIELD_ID = {};
+  const fieldList = FORM_DATA.schema.table.fieldList;
+  
+  for (const fieldId of Object.keys(fieldList)) {
+    ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+  }
+  for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+    ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+    const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+  }
+  
+  function customizeEditSubtable(subtableFieldCode, record, afterConfirmEditCallBack = undefined) {
+    const subtableFieldId = ELEMENT_FIELD_ID[subtableFieldCode];
+    // overlay input and button edit
+    const tdSelectors = $(`.subtable-${subtableFieldId} tbody tr td`).not('[class*="subtable-operation-gaia"]');
+    tdSelectors.css("position", "relative");
+    tdSelectors.find('input, button').each(function () {
+      $(this).attr('tabindex', '-1');
+    });
+    tdSelectors.append(`<div class="subtable-overlay-customize subtable-overlay-customize-active"></div>`);
+  
+    const tdOperations = $(`.subtable-${subtableFieldId} tbody tr td[class*="subtable-operation-gaia"]`);
+    tdOperations.each(function (index, element) {
+      const tdSelector = $(element);
+  
+      // Kiểm tra xem record[subtableFieldCode] và record[subtableFieldCode].value[index] có tồn tại không
+      if (record[subtableFieldCode] && record[subtableFieldCode].value && record[subtableFieldCode].value[index]) {
+        const statusFieldCode = subtableFieldCode + '_ステータス';
+  
+        // Lấy giá trị của ステータス nếu trường tồn tại
+        const statusField = record[subtableFieldCode].value[index].value[statusFieldCode]
+          ? record[subtableFieldCode].value[index].value[statusFieldCode].value
+          : null;
+  
+        if (statusField !== '自動') {
+          const btnEdit = $('<button class="btn-edit-row-subtable"><i class="fa fa-pencil"></i></button>');
+          tdSelector.find('.add-row-image-gaia').before(btnEdit);
+  
+          btnEdit.on('click', function () {
+            const indexEdit = tdSelector.index(`.subtable-${subtableFieldId} tbody tr td[class*="subtable-operation-gaia"]`);
+            console.log('indexEdit', indexEdit);
+            
+            const newRow = tdSelector.closest('tr');  // Lấy dòng chứa biểu tượng "bút"
+  
+             // Ẩn nút Lookup và Clear khi bấm vào icon bút
+            const lookupBtn = newRow.find('button.btn.btn-sm.btn-info');  // Nút Lookup
+            const clearBtn = newRow.find('button.btn.btn-sm.btn-danger');  // Nút Clear
+          
+            if (lookupBtn) lookupBtn.css('display', 'none');  // Ẩn nút Lookup
+            if (clearBtn) clearBtn.css('display', 'none');    // Ẩn nút Clear
+          
+          
+            const tdEditSelector = $(`.subtable-${subtableFieldId} tbody tr`).eq(indexEdit);
+            if (!$(this).find('i').hasClass('fa-pencil')) {
+              tdEditSelector.find(`.subtable-overlay-customize`).addClass('subtable-overlay-customize-active');
+              $(this).find('i').removeClass('fa-times').addClass('fa-pencil');
+              tdEditSelector.find('input, button').each(function () {
+                $(this).attr('tabindex', '-1');
+              });
+            } else {
+              const result = confirm(locales['CONFIRM_EDIT']);
+              if (!result) return;
+              if (afterConfirmEditCallBack) afterConfirmEditCallBack(indexEdit);
+              tdEditSelector.find(`.subtable-overlay-customize`).removeClass('subtable-overlay-customize-active');
+              $(this).find('i').removeClass('fa-pencil').addClass('fa-times');
+              tdEditSelector.find('input, button').each(function () {
+                $(this).removeAttr('tabindex');
+              });
+            }
+          });
+        }
+      } else {
+        console.log(`Record at index ${index} or subtableFieldCode ${subtableFieldCode} is undefined.`);
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    MF_LOOKUP_SUBTABLE.beforeLookup = () => {
+      const record = kintone.app.record.get().record;
+      MF_LOOKUP_SUBTABLE.setCondition(`商品一覧 like "${record['商品'].value}" order by 選別日付 desc`);
+    } 
+  });
+  
+  // create cancel batch button 
+  kintone.events.on([
+    'app.record.create.show',
+    'app.record.edit.show',
+    'app.record.create.change.残り数',
+    'app.record.edit.change.残り数',
+  ], (event) => {
+    $('.btn-cancel-batch').remove();
+    const record = event.record;
+    for (const [index, row] of record['入荷'].value.entries()){
+      if (+row.value['残り数'].value > 0){
+        const trElm = $(`.subtable-${ELEMENT_FIELD_ID['入荷']} tbody tr`).eq(index);
+        const tdElm = trElm.find('[class*="subtable-operation-gaia"]');
+        const btnCancelBatch = $(`<button class="btn btn-sm btn-warning btn-cancel-batch" style="margin: -15px 0 0 15px;"><i class="fa fa-trash" style="margin-right: 5px" aria-hidden="true"></i>${locales['CANCEL_BATCH']}</button>`);
+        tdElm.append(btnCancelBatch);
+        
+        btnCancelBatch.on('click', function(){
+          const record = kintone.app.record.get().record;
+          const cancelBatchTable = record['廃棄処理'].value;
+          if (cancelBatchTable.length == 1 
+            && !cancelBatchTable[0].value['廃棄処理_選別ロット番号'].value
+            && !cancelBatchTable[0].value['廃棄処理_入荷日'].value
+            && !cancelBatchTable[0].value['廃棄処理_選別日'].value
+            && !cancelBatchTable[0].value['廃棄数'].value
+          ){
+            cancelBatchTable.shift();
+          }
+          $(`.subtable-${ELEMENT_FIELD_ID['廃棄処理']} tbody`).find('tr:last').find('[class*="subtable-operation-gaia"] button.add-row-image-gaia').click();
+          setTimeout(() => {
+            const newRecord = kintone.app.record.get().record;
+            const cancelBatchTable = newRecord['廃棄処理'].value;
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄処理_選別ロット番号'].value = row.value['入荷_選別ロット番号'].value;
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄処理_入荷日'].value = row.value['入荷日'].value;
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄処理_選別日'].value = row.value['入荷_選別日'].value;
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄日'].value = moment().format('YYYY-MM-DD');
+            
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄処理_選別ロット番号'].disabled = true;
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄処理_入荷日'].disabled = true;
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄処理_選別日'].disabled = true;
+            cancelBatchTable[cancelBatchTable.length - 1].value['廃棄日'].disabled = true;
+            kintone.app.record.set({record: newRecord})
+          }, 100)
+          
+        })
+      }
+    }
+    return event;
+  });
+  
+  // filter before lookup
+  kintone.events.on([
+    'app.record.create.show',
+    'app.record.edit.show',
+  ], (event) => {
+    const record = event.record;
+    MF_LOOKUP_SUBTABLE.setCondition(`商品一覧 like "${record['商品'].value}" order by 選別日付 desc`);
+    MF_LOOKUP_SUBTABLE.customizeRowRecordPicker = (({element, rowData}) => {
+      console.log('element', element);
+      console.log('rowData', rowData);
+      let check = false;
+      for (const item of rowData['選別データ'].value){
+        if (+item.value['数量'].value > 0){
+          check = true;
+          break;
+        }
+      }
+      if (!check){
+        element.css('color', '#ccc');
+        const btnSetRecord = element.find('button');
+        btnSetRecord.prop('disabled', true);
+        btnSetRecord.prop('title', '切らす');
+      }
+    })
+    return event;
+  })
+  
+  // disable subtable 入荷, 出荷, 廃棄処理
+  kintone.events.on([
+    'app.record.edit.show',
+  ], (event) => {
+    const subtables = ['入荷', '出荷', '廃棄処理']
+    const record = event.record;
+    console.log('record', record);
+    for (const subtable of subtables){
+      customizeEditSubtable(subtable, record);
+      if (subtable == '廃棄処理'){
+        const cancelBatchTable = record['廃棄処理'].value;
+          if (cancelBatchTable.length == 1 
+            && !cancelBatchTable[0].value['廃棄処理_選別ロット番号'].value
+            && !cancelBatchTable[0].value['廃棄処理_入荷日'].value
+            && !cancelBatchTable[0].value['廃棄処理_選別日'].value
+            && !cancelBatchTable[0].value['廃棄数'].value
+          ) {
+            $(`.subtable-${ELEMENT_FIELD_ID['廃棄処理']} tbody .subtable-overlay-customize`).removeClass('subtable-overlay-customize-active');
+            $(`.subtable-${ELEMENT_FIELD_ID['廃棄処理']} tbody .btn-edit-row-subtable`).hide();
+          }
+      }
+    }
+    return event;
+  });
+  
+  async function getRecordById(appId, recordId) {
+    const kintoneUrl = `/k/v1/record.json?app=${appId}&id=${recordId}`;
+    try {
+      const response = await kintone.api(kintoneUrl, "GET");
+      return response;
+    } catch (error) {
+
+    }
+  }
+  const arrivalDeleted = [];
+  
+  kintone.events.on([
+    'app.record.create.show',
+    'app.record.edit.show',
+    'app.record.create.change.入荷',
+    'app.record.edit.change.入荷',
+    'app.record.create.change.出荷',
+    'app.record.edit.change.出荷',
+    'app.record.create.change.廃棄処理',
+    'app.record.edit.change.廃棄処理',
+  ], (event) => {
+
+    const subtables = ['入荷', '出荷', '廃棄処理']
+    const record = event.record;
+    console.log('record', record);
+      record['前日までの選別'].disabled = true;
+      record['前日までの出荷数'].disabled = true;
+      record['前日までの在庫数'].disabled = true;
+      
+    for (const subtable of subtables){
+      const subtableFieldId = ELEMENT_FIELD_ID[subtable];
+      // fake button remove
+      for (const [index, item] of record[subtable].value.entries()){
+        if (!item.id) continue;
+        const trSelector = $(`.subtable-${subtableFieldId} tbody tr`).eq(index);
+        trSelector.find('.remove-row-image-gaia').not(':first').remove();
+        const realRemoveBtn = trSelector.find('.remove-row-image-gaia');
+        const tdParent = realRemoveBtn.parent();
+        const fakeRemoveBtn = realRemoveBtn.clone();
+        realRemoveBtn.addClass('display-none');
+        realRemoveBtn.after(fakeRemoveBtn);
+        fakeRemoveBtn.removeClass('display-none');
+        fakeRemoveBtn.on('click', function(){
+          if (subtable == '出荷'){
+            // check 出荷・納品 record exist
+            const shipRecordId = item.value['出荷_納品ID'].value;
+            // let shipRecord = getRecordById(SHIPPING_AND_DELIVERY_APP_ID, shipRecordId);
+            if (item.value['出荷_納品ID'].value){
+              alert('この行は出荷・納品アプリ のレコードに連携されているため削除できません。');
+              return;
+            }
+          }
+          else if (subtable == '入荷'){
+            let arrivedId = item.id;
+            let ship = record['出荷'].value.find(o => o.value['入荷ID'].value == arrivedId);
+            if (ship) {
+              alert('この行は出荷・納品アプリ のレコードに連携されているため削除できません。');
+              return;
+            }
+          }
+          
+          const result = confirm(locales['CONFIRM_DELETE']);
+          if (!result) return;
+          if (subtable == '入荷'){
+            arrivalDeleted.push(item);
+          }
+          realRemoveBtn.click();
+        })
+        if (index == 0 && record[subtable].value.length == 1) fakeRemoveBtn.hide();
+      }
+    }
+    // disable new row in 入荷 table
+    for (const item of record['入荷'].value){
+      if (item.id == null){
+        item.value['入荷_選別日'].disabled = true;
+        item.value['入荷_選別ロット番号'].disabled = true;
+        item.value['入荷数'].disabled = true;
+        item.value['残り数'].disabled = true;
+      }
+    }
+    // disabled ステータス in 出荷
+    for (const item of record['出荷'].value){
+      item.value['出荷_ステータス'].disabled = true;
+    }
+    
+    
+    return event;
+  });
+  kintone.events.on([
+    'app.record.create.change.入荷',
+    'app.record.edit.change.入荷',
+    
+    'app.record.create.change.出荷',
+    'app.record.edit.change.出荷',
+    
+    'app.record.create.change.廃棄処理',
+    'app.record.edit.change.廃棄処理',
+    
+    'app.record.create.change.廃棄数',
+    'app.record.edit.change.廃棄数',
+    
+    'app.record.create.change.出荷数',
+    'app.record.edit.change.出荷数',
+    
+    'app.record.create.change.入荷数',
+    'app.record.edit.change.入荷数',
+    
+    'app.record.create.change.入荷_選別ロット番号',
+    'app.record.edit.change.入荷_選別ロット番号',
+    
+    'app.record.create.change.入荷_選別日',
+    'app.record.edit.change.入荷_選別日',
+    
+    'app.record.create.change.出荷_選別ロット番号',
+    'app.record.edit.change.出荷_選別ロット番号',
+    
+    'app.record.create.change.廃棄処理_選別ロット番号',
+    'app.record.edit.change.廃棄処理_選別ロット番号',
+
+  ], (event) => {
+    
+    setTimeout(() => {
+      const record = kintone.app.record.get().record;
+      console.log('record', record);
+      const importProductTbl = record['入荷'].value;
+      const exportProductTbl= record['出荷'].value;
+      const expiredProductTbl = record['廃棄処理'].value;
+      const products = {};
+      for (const item of importProductTbl){
+        const product = item.value;
+        if (product['入荷_選別ロット番号'].value && isNumber(+product['入荷数'].value) && product['入荷日'].value){
+          const batchId = product['入荷_選別ロット番号'].value.toString() + "-" + product['入荷日'].value.toString();
+          if (!products[batchId]) products[batchId] = 0;
+          products[batchId] += +product['入荷数'].value;
+        }
+      }
+      for (const item of exportProductTbl){
+        const product = item.value;
+        if (product['出荷_選別ロット番号'].value && isNumber(+product['出荷数'].value)){
+          
+          const importProductId = product['入荷ID'].value
+          const importProduct = (importProductTbl.find(o => o.id == importProductId))?.value;
+          
+          if (!importProduct || !importProduct['入荷_選別ロット番号'].value || !importProduct['入荷日'].value) continue;
+          const batchId = importProduct['入荷_選別ロット番号'].value.toString() + "-" + importProduct['入荷日'].value.toString();
+          
+          if (!products[batchId]) continue;
+          products[batchId] = products[batchId] - (+product['出荷数'].value);
+        }
+      }
+      for (const item of expiredProductTbl){
+        const product = item.value;
+        if (product['廃棄処理_選別ロット番号'].value && isNumber(+product['廃棄数'].value) && product['廃棄処理_入荷日'].value){
+          const batchId = product['廃棄処理_選別ロット番号'].value.toString() + "-" + product['廃棄処理_入荷日'].value.toString();
+          if (!products[batchId]) continue;
+          products[batchId] = products[batchId] - (+product['廃棄数'].value);
+        }
+      }
+      for (const [index, item] of importProductTbl.entries()){
+        const product = item.value;
+        if (product['入荷_選別ロット番号'].value && isNumber(+product['入荷数'].value) && product['入荷日'].value){
+          const batchId = product['入荷_選別ロット番号'].value.toString() + "-" +product['入荷日'].value.toString();
+          product['残り数'].value = products[batchId];
+        }
+      }
+      console.log('products', products);
+      kintone.app.record.set({"record": record});
+    }, 1);
+
+    return event;
+  });
+  
+  
+  kintone.events.on([
+    'app.record.create.submit',
+    'app.record.edit.submit'
+  ], (event) => {
+    $('.input-error-cybozu.input-error-cybozu-customize').remove();
+    const record = event.record;
+    console.log('record', record);
+    const importProductTbl = record['入荷'].value;
+    const map = {};
+    // check duplicate row in import product subtable
+    for (const [index, item] of importProductTbl.entries()){
+      const product = item.value;
+      const batchId = product['入荷_選別ロット番号'].value;
+      if (batchId){
+        if (!map[batchId]) map[batchId] = [];
+        map[batchId].push(index);
+      }
+    }
+    const importBatchField = ELEMENT_FIELD_ID['入荷'];
+    const importBatchIdField = ELEMENT_FIELD_ID['入荷_選別ロット番号'];
+    // check exist batchId in disposal subtable
+    const disposalBatchField = ELEMENT_FIELD_ID['廃棄処理'];
+    const disposalBatchIdField = ELEMENT_FIELD_ID['廃棄処理_選別ロット番号'];
+    const disposalBatches = record['廃棄処理'].value;
+    console.log('disposalBatches', disposalBatches);
+    let ok = true;
+    for (const [rowIndex, item] of disposalBatches.entries()){
+      const batch = item.value;
+      const batchId = batch['廃棄処理_選別ロット番号'].value;
+      if (map[batchId] || !batchId) continue;
+      const batchIdField = $(`.subtable-${disposalBatchField} tbody td div.field-${disposalBatchIdField} .control-value-gaia`).eq(rowIndex);
+      batchIdField.append(`<div class="input-error-cybozu input-error-cybozu-customize">${locales['BATCH_NUMBER_DOES_NOT_EXIST']}</div>`);
+      ok = false;
+    }
+    for (const [rowIndex, item] of disposalBatches.entries()){
+      if (disposalBatches.length > 1) {
+        if (!item.value['廃棄数'].value || !item.value['廃棄処理_選別ロット番号'].value){
+          const lastTd = $(`.subtable-${disposalBatchField} tbody tr`).eq(rowIndex).find('td').last();
+          lastTd.append(`<div style="margin-left: 5px" class="input-error-cybozu input-error-cybozu-customize">${locales['PLEASE_ENTER_COMPLETE_DATA']}</div>`);
+          ok = false;
+        }
+      }
+      else {
+        if (!!item.value['廃棄数'].value ^ !!item.value['廃棄処理_選別ロット番号'].value){
+          const lastTd = $(`.subtable-${disposalBatchField} tbody tr`).eq(rowIndex).find('td').last();
+          lastTd.append(`<div style="margin-left: 5px" class="input-error-cybozu input-error-cybozu-customize">${locales['PLEASE_ENTER_COMPLETE_DATA']}</div>`);
+          ok = false;
+        }
+      }
+    }
+    if (!ok) return false;
+    // check remain batch 
+    const remainQuantityField = ELEMENT_FIELD_ID['残り数'];
+    for (const [rowIndex, item] of importProductTbl.entries()){
+      const product = item.value;
+      if (+product['残り数'].value < 0){
+        const remainQuantity = $(`.subtable-${importBatchField} tbody td div.field-${remainQuantityField} .control-value-gaia`).eq(rowIndex);
+        remainQuantity.append(`<div class="input-error-cybozu input-error-cybozu-customize">${locales['QUANTITY_LESS_THAN_ZERO']}</div>`);  
+        for (const [cancelIndex, cancelRow] of record['廃棄処理'].value.entries()){
+          if (cancelRow.value['廃棄処理_選別ロット番号'].value == item.value['入荷_選別ロット番号'].value && cancelRow.value['廃棄処理_入荷日'].value == item.value['入荷日'].value){
+            const remainDiv = $(`.value-${ELEMENT_FIELD_ID['廃棄数']}`).eq(cancelIndex);
+            const remainElm = remainDiv.find('input');
+            remainDiv.append(`<div class="input-error-cybozu input-error-cybozu-customize">${locales['THE_DISPOSAL_QUANTITY_MUST_NOT_EXCEED_CURRENT_STOCK']}</div>`)
+          }
+        }
+        ok = false;
+      }
+    }
+    if (!ok) return false;
+    return event;
+  });
+  
+  kintone.events.on([
+    'app.record.create.submit.success',
+    'app.record.edit.submit.success'
+  ], async (event) => {
+    console.log('arrivalDeleted', arrivalDeleted);
+    for (const item of arrivalDeleted){
+      const product = item.value;
+      const lookupValue = product['ルックアップキー'].value;
+      if (!lookupValue) continue;
+      const sortRecordId = lookupValue.split("|")[0];
+      const sortRowId = lookupValue.split("|")[1];
+      const resp = await kintone.api(kintone.api.url('/k/v1/record.json', true) + `?app=${SORTING_MANAGEMENT_APP_ID}&id=${sortRecordId}`, 'GET', {});
+      const record = resp.record;
+      let needUpdate = true;
+      for (const item of record['選別データ'].value){
+        if (item.id == sortRowId){
+          item.value['数量'].value = (+item.value['数量'].value) + (+product['入荷数'].value);
+        }
+      }
+      const body = {
+        'app': SORTING_MANAGEMENT_APP_ID,
+        'id': sortRecordId,
+        'record': {
+          '選別データ': {
+            value: record['選別データ'].value
+          }
+        }
+      };
+      await kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT', body)
+    }
+
+    const record = event.record;
+    console.log('record', record);
+    const importProductTbl = record['入荷'].value;
+    for (const item of importProductTbl){
+      const product = item.value;
+      const lookupValue = product['ルックアップキー'].value;
+      if (!lookupValue) continue;
+      const sortRecordId = lookupValue.split("|")[0];
+      const sortRowId = lookupValue.split("|")[1];
+      const resp = await kintone.api(kintone.api.url('/k/v1/record.json', true) + `?app=${SORTING_MANAGEMENT_APP_ID}&id=${sortRecordId}`, 'GET', {});
+      const record = resp.record;
+      let needUpdate = true;
+      for (const item of record['選別データ'].value){
+        if (item.id == sortRowId){
+          if (item.value['数量'].value && +item.value['数量'].value > 0){
+            item.value['数量'].value = 0;
+          }
+          else {
+            needUpdate = false;
+          }
+        }
+      }
+      if (needUpdate){
+        const body = {
+          'app': SORTING_MANAGEMENT_APP_ID,
+          'id': sortRecordId,
+          'record': {
+            '選別データ': {
+              value: record['選別データ'].value
+            }
+          }
+        };
+        await kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT', body)
+      }
+    }
+    
+    return event;
+  });
+  
+  function isNumber(value) {
+      return typeof value === 'number' && !isNaN(value);
+  }
+  kintone.events.on([
+    'app.record.create.change.入荷',
+    'app.record.edit.change.入荷',
+    'app.record.create.change.入荷_ステータス',
+    'app.record.edit.change.入荷_ステータス'
+  ], function(event) {
+    const record = event.record;
+    const arrivalArray = event.record['入荷'].value;
+
+    arrivalArray.forEach((row, index) => {
+      const statusField = row.value['入荷_ステータス'].value;
+      const newRow = $(`.subtable-gaia tbody tr`).eq(index);
+      if (statusField === '手動'){
+        newRow.find('.lookup-clear-customize button').hide();
+      }
+      else newRow.find('.lookup-clear-customize button').show();
+      row.value['入荷日'].disabled = statusField === '自動';
+      row.value['入荷数'].disabled = statusField === '自動';
+      row.value['入荷_選別ロット番号'].disabled = statusField === '自動';
+      row.value['入荷_選別日'].disabled = statusField === '自動';
+    });
+
+    return event;
+  });
+  
+  kintone.events.on([
+    'app.record.create.change.出荷',
+    'app.record.edit.change.出荷',
+  ], function(event) {
+    const record = event.record;
+    for (const row of event.record['出荷'].value){
+      if (!row.id) {
+        row.value['出荷_ステータス'].value = '手動';
+      }
+    }
+    return event;
+  });
+  
+  kintone.events.on([
+    'app.record.detail.delete.submit',
+    'app.record.index.delete.submit',
+  ], async (event) => {
+    const record = event.record;
+    const arrivalIds = record['入荷'].value.map(o => o.id) || [];
+    const ships = record['出荷'].value || [];
+    
+    for (const row of ships){
+      if (row.value['出荷_納品ID'].value){
+        alert('このレコードは出荷・納品アプリ のレコードに連携されているため削除できません。');
+        return false;
+      }
+    }
+    
+    const arrivalDeleted = record['入荷'].value;
+    
+    for (const item of arrivalDeleted){
+      const product = item.value;
+      const lookupValue = product['ルックアップキー'].value;
+      if (!lookupValue) continue;
+      const sortRecordId = lookupValue.split("|")[0];
+      const sortRowId = lookupValue.split("|")[1];
+      const resp = await kintone.api(kintone.api.url('/k/v1/record.json', true) + `?app=${SORTING_MANAGEMENT_APP_ID}&id=${sortRecordId}`, 'GET', {});
+      const record = resp.record;
+      let needUpdate = true;
+      for (const item of record['選別データ'].value){
+        if (item.id == sortRowId){
+          item.value['数量'].value = (+item.value['数量'].value) + (+product['入荷数'].value);
+        }
+      }
+      const body = {
+        'app': SORTING_MANAGEMENT_APP_ID,
+        'id': sortRecordId,
+        'record': {
+          '選別データ': {
+            value: record['選別データ'].value
+          }
+        }
+      };
+      await kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT', body)
+    }
+    
+    return event;
+  });
+  
+  // clear value after duplicate record
+  kintone.events.on([
+    'app.record.create.show'
+  ], (event) => {
+    console.log('event', event);
+    const reuse = event.reuse;
+    const record = event.record;
+    if (reuse){
+      let url = new URL(window.location.href);
+      url.searchParams.delete("record");
+      window.location.href = url.toString();
+    }
+    return event;
+  });
+  // hide duplicate button
+  kintone.events.on([
+    'app.record.detail.show'
+  ], (event) => {
+    $('a.gaia-argoui-app-menu-copy').hide();
+    return event;
+  });
+    
+    kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+        'app.record.detail.show'
+    ], async (event) => {
+      const targetElement = $(`.subtable-${ELEMENT_FIELD_ID[`出荷`]} tbody`)[0];
+      const config = { childList: true, subtree: true };
+      const callback = function(mutationsList, observer) {
+          mutationsList.forEach(function(mutation) {
+               $(`.label-${ELEMENT_FIELD_ID[`入荷ID`]}`).hide();
+               $(`.field-${ELEMENT_FIELD_ID[`入荷ID`]}`).closest('td').hide();
+               $(`.label-${ELEMENT_FIELD_ID[`出荷_納品ID`]}`).hide();
+               $(`.field-${ELEMENT_FIELD_ID[`出荷_納品ID`]}`).closest('td').hide();
+          });
+      };
+      const observer = new MutationObserver(callback);
+      observer.observe(targetElement, config);
+         $(`.label-${ELEMENT_FIELD_ID[`入荷ID`]}`).hide();
+         $(`.field-${ELEMENT_FIELD_ID[`入荷ID`]}`).closest('td').hide();
+         $(`.label-${ELEMENT_FIELD_ID[`出荷_納品ID`]}`).hide();
+         $(`.field-${ELEMENT_FIELD_ID[`出荷_納品ID`]}`).closest('td').hide();
+      return event;
+    })
+
+})(jQuery);

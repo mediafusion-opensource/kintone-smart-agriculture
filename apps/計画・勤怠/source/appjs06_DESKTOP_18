@@ -1,0 +1,1371 @@
+/* 
+  home
+*/
+(async function ($homeJQuery) {
+  'use strict';
+  // Dependency Injection
+  const VIEW_ID = '8403663';
+  const USER_LOGIN = kintone.getLoginUser();
+  const isMobile = window.location.href.includes("/k/m");
+  const userMasterService = MF_AGRI_SERVICES.USER_MASTER_SERVICES;
+  const workMasterService = MF_AGRI_SERVICES.WORK_MASTER_SERVICES;
+  const fieldMasterService = MF_AGRI_SERVICES.FIELD_MASTER_SERVICES;
+  const cropMasterService = MF_AGRI_SERVICES.CROP_MASTER_SERVICES;
+  const workService = MF_AGRI_SERVICES.WORK_SERVICES;
+
+  let userMasterData = [];
+  let workMasterData = [];
+  let fieldMasterData = [];
+  let cropMasterData = [];
+  const kintoneLoginUser = kintone.getLoginUser();
+  let currentUser;
+
+  let userPermissions = await userMasterService.getUserPermissions(USER_LOGIN.code);
+  console.log('userPermissions', userPermissions);
+
+  const language = 'ja';
+  const IFRAME_EVENTS = [
+    'PLAN_REGISTRATION_SUCCESS',
+    'PLAN_REGISTRATION_FAILURE',
+    'PLAN_EDIT_SUCCESS',
+    'PLAN_EDIT_FAILURE',
+    'PLAN_DELETION_SUCCESS',
+    'PLAN_DELETION_FAILURE',
+    'ACTUAL_REGISTRATION_SUCCESS',
+    'ACTUAL_REGISTRATION_FAILURE',
+    'ACTUAL_EDIT_SUCCESS',
+    'ACTUAL_EDIT_FAILURE',
+    'ACTUAL_DELETION_SUCCESS',
+    'ACTUAL_DELETION_FAILURE'
+  ];
+  
+  const PLAN_GROUP_BY_CACHE_KEY = 'MF_AGRI_PLAN_GROUP_BY_CACHE_KEY';
+  const ACTUAL_GROUP_BY_CACHE_KEY = 'MF_AGRI_ACTUAL_GROUP_BY_CACHE_KEY';
+  const BG_COLOR_EVENT_NOT_ASSIGN = '#fff';
+  const BG_COLOR_EVENT_NOT_START = '#e8697d';
+  const BG_COLOR_EVENT_PROCESSING = '#5589c0';
+  const BG_COLOR_EVENT_COMPLETED = '#8ee6c2';
+  const BG_COLOR_EVENT_ABNORMAL = '#fdbc64';
+  
+  const WORK_STATUS_FIELD_CODE = '作業ステータス';
+  const WORK_STATUS_NOT_START = '未対応';
+  const WORK_STATUS_PROCESSING = '処理中';
+  const WORK_STATUS_COMPLETED = '完了';
+  const WORK_STATUS_ABNORMAL = '異常';
+  
+  const EMPLOYEE_ID_FIELD_CODE = '社員コード';
+  const EMPLOYEE_NAME_FIELD_CODE = '作業者名';
+  const PLAN_DATE_FIELD_CODE = '予定日';
+  const PLAN_START_DATE_TIME_FIELD_CODE = '計画_開始時刻';
+  const PLAN_END_DATE_TIME_FIELD_CODE = '計画_終了時刻';
+  const WORK_MASTER_ID_FIELD_CODE = '作業コード';
+  const WORK_MASTER_NAME_FIELD_CODE = '作業名';
+  const REMASK_FIELD_CODE = '備考';
+  const PERFORMANCE_UNIT_FIELD_CODE = '実績単位';
+  const CROP_FIELD_CODE = '作付';
+  const FIELD_FIELD_CODE = '圃場';
+  const VARIETY_FIELD_CODE = '品種';
+  
+  const ACTUAL_EMPLOYEE_NAME_FIELD_CODE = '実際_作業者名';
+  const ACTUAL_DATE_FIELD_CODE = '作業日';
+  const ACTUAL_START_DATE_TIME_FIELD_CODE = '実績_開始時刻';
+  const ACTUAL_END_DATE_TIME_FIELD_CODE = '実績_終了時刻';
+  const BREAK_TIME_FIELD_CODE = '休憩時間';
+  const TIME_SPENT_FIELD_CODE = '作業時間';
+  const PERFORMANCE_QUANTITY_FIELD_CODE = '実績数';
+  const TARGET_NOTI_FIELD_CODE = '対象通知';
+  const NOTI_CONTENT_FIELD_CODE = '通知内容';
+  
+  const GROUP_ID_FIELD_CODE = 'グループID';
+  
+  // disable kintone mobile guide
+  localStorage.setItem('gaia.10::com.cybozu.kintone.mobile.LocalSetting',
+    JSON.stringify({
+      "v2NavigationPanelButtonTooltipDisplayed": true,
+      "v2WelcomeDialogDisplayed": true
+    }))
+  localStorage.setItem('gaia.21::com.cybozu.kintone.mobile.LocalSetting',
+    JSON.stringify({
+      "v2NavigationPanelButtonTooltipDisplayed": true,
+      "v2WelcomeDialogDisplayed": true
+    }))
+
+  kintone.events.on(['app.record.index.show', 'mobile.app.record.index.show'], async function (event) {
+    try {
+      const viewId = event.viewId;
+      if (viewId != VIEW_ID) return event;
+      $homeJQuery(".gaia-argoui-app-index-pager").hide();
+      $homeJQuery("body").append(`<div class="d-flex flex-row" id="mf-container"></div>`);
+      $homeJQuery(".gaia-argoui-app-infobar-breadcrumb-iconlist").css('border-bottom', '0px');
+      $homeJQuery('.gaia-argoui-app-infobar').css('border-bottom', '1px solid #ebebeb');
+      $homeJQuery('.gaia-argoui-app-menu-add.gaia-argoui-app-menu').hide();
+      $homeJQuery('.gaia-argoui-optionmenubutton.gaia-argoui-app-menu-option').hide();
+      $homeJQuery('.gaia-argoui-app-filterbutton').hide();
+      $homeJQuery('.gaia-argoui-app-subtotalbutton').hide();
+      
+      const loadingModal = $homeJQuery(`<div id="customLoadingModal" class="custom-modal">
+        <div class="custom-modal-content">
+            <div class="custom-loader"></div>
+        </div>
+      </div>`);
+      $homeJQuery('body').append(loadingModal);
+      
+
+      $homeJQuery("#mf-container").append(
+        `
+        <div id="calendar-tree-view" style="border-right: 1px solid #ccc">
+          <div style="width: 200px" class="p-2">
+            <ul id="tree-view-customize">
+              <li><span class="caret-customize">グループ化</span>
+                <ul class="nested-customize" id="tree-view-root"></ul>
+              </li>
+            </ul>
+          </div>
+          <div style="margin-left: 70px">
+            <button class="btn btn-info btn-sm" id="group-by-apply">適用</button>
+            <button class="btn btn-danger btn-sm" id="group-by-reset">リセット</button>
+          </div>
+           
+        </div>
+        <div id="mf-calendar-container" class="p-2 pr-4" style="min-width: 90vw;">
+          <div type="button" id="toggle-tree-view" class="d-inline-block">
+            <i class="fa fa-toggle-on" aria-hidden="true" style="font-size: 24px" title="表示・非表示グループ化"></i>
+            <span style="font-size: 16px">表示・非表示フィルターフォーム</span>
+          </div>
+          
+          <div class="d-flex justify-content-center mb-2 control-date">
+            <div class="d-flex flex-row">
+              <div id="calendar-center"></div>
+              <input id="monthpicker"></input>
+              <input id="weekpicker"></input>
+              <input id="datepicker"></input>
+              <i id="btn-datepicker" title="日付選択" class="fa fa-calendar" style="margin-top: 0.25rem; margin-left: 0.2rem" role="button"></i>
+            </div>
+          </div>
+          <div class="d-flex justify-content-between mb-2">
+            <div class="d-flex control-date">
+              <div class="btn-group mr-4" role="group">
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="前の" id="calendar-previous"><i class="fa fa-chevron-left"></i></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" title="次の" id="calendar-next"><i class="fa fa-chevron-right"></i></button>
+              </div>
+              <div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="calendar-today">${MF_AGRI_LANGUAGES[language].TODAY_UPPERCASE}</button>
+              </div>
+            </div>
+            <div class="d-flex">
+              <div class="btn-group mr-3" role="group">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="calendar-actual-mode">実績</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="calendar-all-mode">全体</button>
+              </div>
+              <div class="mr-5" class="search-icon">
+                <i type="button" class="fa fa-search" title="検索" aria-expanded="false" id="openAdvancedSearch"></i>
+              </div>
+              <div class="btn-group control-date" role="group">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="calendar-oneRowMonth">${MF_AGRI_LANGUAGES[language].MONTH_UPPERCASE}</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="calendar-oneRowWeek">${MF_AGRI_LANGUAGES[language].WEEK_UPPERCASE}</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="calendar-oneRowDate">${MF_AGRI_LANGUAGES[language].DAY_UPPERCASE}</button>
+              </div>
+            </div>
+          </div>
+          <div class="search-container mb-1">
+            <div class="mb-2">
+              <div class="collapse multi-collapse" id="advancedSearch" style="padding: 20px;border: solid 1px #ccc; display: none">
+                <div class="d-flex flex-row justify-content-end mr-2">
+                  <i type="button" class="fa fa-times" id="closeAdvancedSearch" aria-expanded="true"></i>
+                </div>
+                <div class="row mb-2 m-0 mt-2">
+                  <div class="d-flex flex-row col-lg-6 col-md-6 col-sm-6 p-2" id="fieldSearch">
+                    <label for="fieldSearch" class="search-label">圃場</label>
+                    <div class="position-relative select-container-customize" style="width: 100%">
+                      <div class="form-control select-value-customize" data-target=".fieldSearchOptions"></div>
+                      <div class="collapse select-form-customize fieldSearchOptions position-absolute">
+                        <input type="text" class="form-control select-search-customize" placeholder="検索...">
+                        <ul class="select-options-customize list-unstyled"></ul>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-row col-lg-6 col-md-6 col-sm-6 p-2" id="userSearch">
+                    <label for="fieldSearch" class="search-label">担当者</label>
+                    <div class="position-relative select-container-customize" style="width: 100%">
+                      <div class="form-control select-value-customize" data-target=".userSearchOptions"></div>
+                      <div class="collapse select-form-customize userSearchOptions position-absolute">
+                        <input type="text" class="form-control select-search-customize" placeholder="検索...">
+                        <ul class="select-options-customize list-unstyled"></ul>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-row col-lg-6 col-md-6 col-sm-6 p-2" id="workSearch">
+                    <label for="fieldSearch" class="search-label">作業</label>
+                    <div class="position-relative select-container-customize" style="width: 100%">
+                      <div class="form-control select-value-customize" data-target=".workSearchOptions"></div>
+                      <div class="collapse select-form-customize workSearchOptions position-absolute">
+                        <input type="text" class="form-control select-search-customize" placeholder="検索...">
+                        <ul class="select-options-customize list-unstyled"></ul>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-row col-lg-6 col-md-6 col-sm-6 p-2" id="cropSearch">
+                    <label for="fieldSearch" class="search-label">作付</label>
+                    <div class="position-relative select-container-customize" style="width: 100%">
+                      <div class="form-control select-value-customize" data-target=".cropSearchOptions"></div>
+                      <div class="collapse select-form-customize cropSearchOptions position-absolute">
+                        <input type="text" class="form-control select-search-customize" placeholder="検索...">
+                        <ul class="select-options-customize list-unstyled"></ul>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="d-flex flex-row col-lg-6 col-md-6 col-sm-6 p-2">
+                    <label class="search-label">時間</label>
+                    <div class="form-control" style="border: 0px; padding-top: 0px; height: 70px">
+                      <div class="d-flex flex-row mb-1">
+                        <div>
+                          <input class="form-control" style="width: 95%" id="startDateSearchPicker" placeholder="YYYY/MM/DD">
+                          <small id="startDateSearchPicker-error" style="color: red"></small>
+                        </div>
+                        <div>
+                          <input class="form-control " id="startTimePicker" type="time" disabled>
+                          <small id="startTimePicker-error" style="color: red"></small>
+                        </div>
+                      </div>
+                      <div class="d-flex flex-row">
+                        <div>
+                          <input class="form-control" style="width: 95%" id="endDateSearchPicker" placeholder="YYYY/MM/DD">
+                          <small id="endDateSearchPicker-error" style="color: red"></small>
+                        </div>
+                        <div>
+                          <input class="form-control " id="endTimePicker" type="time" disabled>
+                          <small id="endTimePicker-error" style="color: red"></small>
+                        </div>
+                      </div>
+                      <div id="dateTimeSearch-error" class="mt-1" style="color: red"></div>
+                    </div>
+                    <div>
+                      <label class="switch">
+                        <input id="timeOptionSearch" type="checkbox" checked>
+                        <span class="slider round"></span>
+                      </label>
+                      <span>終日</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="d-flex flex-row justify-content-end p-2">
+                  <div class="row m-0">
+                    <button class="btn btn-success btn-sm mr-1" style="width: 100px" id="searchBtn">検索</button>
+                    <button class="btn btn-outline-secondary btn-sm" style="width: 100px" id="clearSeachBtn">リセット</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="d-flex mb-2 justify-content-between">
+            <div class="mr-2">
+              <button type="button" class="btn btn-sm btn-secondary" id="addNewEvent">計画を登録</button>
+            </div>
+            <div class="btn-group control-filter-work-status" role="group">
+              <div class="form-check mr-3">
+                <input class="form-check-input" type="checkbox" id="workStatusNotStart" checked style="accent-color: ${BG_COLOR_EVENT_NOT_START}; width: 17px; height: 17px;">
+                <label class="form-check-label" for="workStatusNotStart">
+                  ${WORK_STATUS_NOT_START}
+                </label>
+              </div>
+              <div class="form-check mr-3">
+                <input class="form-check-input" type="checkbox" id="workStatusProcessing" checked style="accent-color: ${BG_COLOR_EVENT_PROCESSING}; width: 17px; height: 17px;">
+                <label class="form-check-label" for="workStatusProcessing">
+                  ${WORK_STATUS_PROCESSING}
+                </label>
+              </div>
+              <div class="form-check mr-3">
+                <input class="form-check-input" type="checkbox" id="workStatusAbnormal" checked style="accent-color: ${BG_COLOR_EVENT_ABNORMAL}; width: 17px; height: 17px;">
+                <label class="form-check-label" for="workStatusAbnormal">
+                  ${WORK_STATUS_ABNORMAL}
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="workStatusCompleted" checked style="accent-color: ${BG_COLOR_EVENT_COMPLETED}; width: 17px; height: 17px;">
+                <label class="form-check-label" for="workStatusCompleted">
+                  ${WORK_STATUS_COMPLETED}
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+        `
+      );
+
+      $homeJQuery("#mf-calendar-container").append(`<div id="calendar"></div>`);
+      
+      
+
+      const GROUP_BY = [
+      	{
+      		fieldCode: '担当者',
+      		fieldName: '人',
+      		fieldShowOnEventItemMonth: ['作業', 'start'],
+      		fieldShowOnEventItemWeek: ['作業', '圃場', '作付', 'start'],
+      		fieldShowOnEventItemDay: ['作業', '圃場', '作付', 'start'],
+      		subFields: [
+      			{
+      				fieldCode: '圃場',
+      				fieldName: '圃場',
+      			},
+      			{
+      				fieldCode: '作付',
+      				fieldName: '作付',
+      			},
+      			{
+      				fieldCode: '作業',
+      				fieldName: '作業'
+      			},
+      		]
+      		
+      	},
+      	{
+      		fieldCode: '作業',
+      		fieldName: '作業',
+      		fieldShowOnEventItemMonth: ['担当者', 'start'],
+      		fieldShowOnEventItemWeek: ['担当者', '圃場', '作付', 'start'],
+      		fieldShowOnEventItemDay: ['担当者', '圃場', '作付', 'start'],
+      		subFields: [
+      			{
+      				fieldCode: '担当者',
+      				fieldName: '人'
+      			},
+      			{
+      				fieldCode: '圃場',
+      				fieldName: '圃場'
+      			},
+      			{
+      				fieldCode: '作付',
+      				fieldName: '作付'
+      			},
+      		]
+      		
+      	},
+      		{
+      		fieldCode: '圃場',
+      		fieldName: '圃場',
+      		fieldShowOnEventItemMonth: ['担当者', 'start'],
+      		fieldShowOnEventItemWeek: ['担当者', '作業', '作付', 'start'],
+      		fieldShowOnEventItemDay: ['担当者', '作業', '作付', 'start'],
+      		subFields: [
+      			{
+      				fieldCode: '担当者',
+      				fieldName: '人',
+      			},
+      			{
+      				fieldCode: '作業',
+      				fieldName: '作業',
+      			},
+      			{
+      				fieldCode: '作付',
+      				fieldName: '作付',
+      			},
+      		]
+                		
+      	}
+      ]
+      const ACTUAL_WORK_GROUP_BY = [
+        {
+      		fieldCode: '担当者',
+      		fieldName: '人',
+      		groupByFields: ['担当者', '作業'],
+      	},
+      	{
+      	  fieldCode: '作業',
+      	  fieldName: '作業',
+      	  groupByFields: ['作業', '担当者'],
+      	}
+      ]
+      let workMode = "ALL";
+      let showTreeView = true;
+      let searched = false;
+      const searchListWorks = async ({
+        fieldSearch,
+        userSearch,
+        workSearch,
+        cropSearch,
+        planStartDateTime,
+        planEndDateTime,
+        actualStartDateTime,
+        actualEndDateTime,
+        workStatus,
+        workMode = 'ALL'
+      }) => {
+        let events = [];
+        if (workMode == 'ALL') {
+          events = await workService.getListWorks({
+            fieldSearch,
+            userSearch,
+            workSearch,
+            cropSearch,
+            planStartDateTime,
+            planEndDateTime,
+            workStatus
+          });
+          events = events.map(o => {
+            return {
+              '担当者': o[EMPLOYEE_NAME_FIELD_CODE].value,
+              '作業': o['作業名'].value,
+              '圃場': o['圃場'].value,
+              '作付': o['作付'].value,
+              [WORK_STATUS_FIELD_CODE]: o[WORK_STATUS_FIELD_CODE].value,
+              [EMPLOYEE_ID_FIELD_CODE]: o[EMPLOYEE_ID_FIELD_CODE].value,
+              
+              eventId: o.$id.value,
+              start: `${o[PLAN_DATE_FIELD_CODE].value}T${o[PLAN_START_DATE_TIME_FIELD_CODE].value}`,
+              end: `${o[PLAN_DATE_FIELD_CODE].value}T${o[PLAN_END_DATE_TIME_FIELD_CODE].value}`,
+              
+              name: o[EMPLOYEE_NAME_FIELD_CODE].value,
+              employeeId: o['社員コード'].value,
+              crop: o['作付'].value,
+              workId: o['作業コード'].value,
+              workField: o['圃場'].value,
+              workTitle: o['作業名'].value,
+              workDesc: o['備考'].value,
+              groupId: o[GROUP_ID_FIELD_CODE].value
+            }
+          });
+          events.sort((a, b) => moment(a.start) - moment(b.start));
+        }
+        else {
+          events = await workService.getListWorks({
+            fieldSearch,
+            actualUserSearch: userSearch,
+            workSearch,
+            cropSearch,
+            actualStartDateTime,
+            actualEndDateTime,
+            workStatus
+          });
+          events = events.map(o => {
+            let hours = 0;
+            if (o['作業時間'].value){
+              let tmp = o['作業時間'].value.split(":");
+              let negative = o['作業時間'].value.includes("-") ? -1 : 1;
+              hours = (negative * (Math.abs(+tmp[0]) +  Math.abs(+tmp[1] / 60))).toFixed(2);
+            }
+            return {
+              '担当者': o[ACTUAL_EMPLOYEE_NAME_FIELD_CODE].value,
+              '作業': o['作業名'].value,
+              '圃場': o['圃場'].value,
+              '作付': o['作付'].value,
+              [WORK_STATUS_FIELD_CODE]: o[WORK_STATUS_FIELD_CODE].value,
+              [EMPLOYEE_ID_FIELD_CODE]: o[EMPLOYEE_ID_FIELD_CODE].value,
+              
+              eventId: o.$id.value,
+              start: `${o[ACTUAL_DATE_FIELD_CODE].value}T${o[ACTUAL_START_DATE_TIME_FIELD_CODE].value}`,
+              end: `${o[ACTUAL_DATE_FIELD_CODE].value}T${o[ACTUAL_END_DATE_TIME_FIELD_CODE].value}`,
+              
+              name: o[ACTUAL_EMPLOYEE_NAME_FIELD_CODE].value,
+              employeeId: o['社員コード'].value,
+              crop: o['作付'].value,
+              workId: o['作業コード'].value,
+              workField: o['圃場'].value,
+              workTitle: o['作業名'].value,
+              workDesc: o['備考'].value,
+              timeSpent: hours,
+              groupId: o[GROUP_ID_FIELD_CODE].value
+            }
+          });
+          events.sort((a, b) => moment(a.start) - moment(b.start));
+        }
+        return events;
+      }
+      const getMasterData = () => {
+        userMasterService.getListUsers().then(result => {
+          userMasterData = result;
+          currentUser = userMasterData.find(o => {
+            if (o['ユーザーの選択'].value.length > 0 && o['ユーザーの選択'].value[0].code == kintoneLoginUser.code) return true;
+          })
+          console.log('userMasterData', userMasterData);
+          console.log('currentUser', currentUser);
+          $homeJQuery('#userSearch ul').empty();
+          $homeJQuery('#userSearch ul').append(`<li data-value="">　</li>`);
+          for (const user of result) {
+            $homeJQuery('#userSearch ul').append(`<li data-value="${user['社員コード'].value}">${user['社員コード'].value} - ${user['氏名'].value}</li>`)
+          }
+        }).catch(e => {
+          console.log(e);
+        })
+        workMasterService.getListUsers().then(result => {
+          workMasterData = result;
+          console.log('workMasterData', workMasterData);
+          $homeJQuery('#workSearch ul').empty();
+          $homeJQuery('#workSearch ul').append(`<li data-value="">　</li>`);
+          for (const work of result) {
+            $homeJQuery('#workSearch ul').append(`<li data-value="${work['作業コード'].value}">${work['作業コード'].value} - ${work['作業名'].value}</li>`)
+          }
+        }).catch(e => {
+          console.log(e);
+        })
+        fieldMasterService.getListFields().then(result => {
+          fieldMasterData = result;
+          console.log('fieldMasterData', fieldMasterData);
+          $homeJQuery('#fieldSearch ul').empty();
+          $homeJQuery('#fieldSearch ul').append(`<li data-value="">　</li>`);
+          for (const field of result) {
+            $homeJQuery('#fieldSearch ul').append(`<li data-value="${field['圃場名'].value}">${field['圃場名'].value}</li>`)
+          }
+        }).catch(e => {
+          console.log(e);
+        })
+        cropMasterService.getListCrops().then(result => {
+          cropMasterData = result;
+          console.log('cropMasterData', cropMasterData);
+          $homeJQuery('#cropSearch ul').empty();
+          $homeJQuery('#cropSearch ul').append(`<li data-value="">　</li>`);
+          for (const crop of result) {
+            $homeJQuery('#cropSearch ul').append(`<li data-value="${crop['作付名'].value}">${crop['作付名'].value}</li>`)
+          }
+        }).catch(e => {
+          console.log(e);
+        })
+      }
+      getMasterData();
+      // month picker
+      $homeJQuery('#monthpicker').datepicker({
+        language: "ja",
+        minViewMode: 1,
+        maxViewMode: 2,
+        todayHighlight: true
+      }).on("changeDate", async function (e) {
+        const date = e.date;
+        console.log('monethpicker date', date);
+        let calendarStartDate = moment(calendar.getOffsetDays()[0]);
+        let newCalendarStartDate = moment(date).startOf('month');
+        let monthOffset = newCalendarStartDate.diff(calendarStartDate, 'month');
+        calendar.updateOptions({ offset: calendar.options.offset + monthOffset });
+      });
+      // week picker
+      $homeJQuery('#weekpicker').datepicker({
+        language: "ja",
+        todayHighlight: true
+      }).on("changeDate", function (e) {
+        const date = e.date;
+        const startDate = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
+        const endDate = new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay() + 6);
+        $homeJQuery('#weekpicker').datepicker('update', startDate);
+        let calendarStartDate = moment(calendar.getOffsetDays()[0]);
+        let newCalendarStartDate = moment(startDate);
+        let weekOffset = newCalendarStartDate.diff(calendarStartDate, 'week');
+        calendar.updateOptions({ offset: calendar.options.offset + weekOffset });
+      });
+      // date picker
+      $homeJQuery('#datepicker').datepicker({
+        language: "ja",
+        todayHighlight: true
+      }).on("changeDate", function (e) {
+        const date = e.date;
+        let calendarStartDate = moment(calendar.getOffsetDays()[0]);
+        let dateOffset = moment(date).diff(calendarStartDate, 'day');
+        console.log('dateOffset', dateOffset);
+        calendar.updateOptions({ offset: calendar.options.offset + dateOffset });
+      });
+
+      $homeJQuery('#startDateSearchPicker, #endDateSearchPicker').datepicker({
+        language: "ja",
+        todayHighlight: true
+      });
+
+      $homeJQuery('#timeOptionSearch').change(function () {
+        if ($homeJQuery(this).is(':checked')) {
+          $homeJQuery('#startTimePicker').val(undefined);
+          $homeJQuery('#endTimePicker').val(undefined);
+          $homeJQuery('#startTimePicker').prop('disabled', true);
+          $homeJQuery('#endTimePicker').prop('disabled', true);
+        } else {
+          $homeJQuery('#startTimePicker').prop('disabled', false);
+          $homeJQuery('#endTimePicker').prop('disabled', false);
+        }
+      });
+
+      $homeJQuery('#btn-datepicker').click(function () {
+        $homeJQuery('#datepicker, #monthpicker, #weekpicker').css("visibility", "hidden");
+        $homeJQuery('.datepicker').removeClass('mf-weekpicker')
+        if (calendar?.options?.initView === 'oneRowMonth') {
+          $homeJQuery('#monthpicker').css("visibility", "visible");
+          $homeJQuery('#monthpicker').focus();
+        }
+        else if (calendar?.options?.initView === 'oneRowWeek') {
+          $homeJQuery('#weekpicker').css("visibility", "visible");
+          $homeJQuery('#weekpicker').focus();
+          $homeJQuery('.datepicker').addClass('mf-weekpicker')
+        }
+        else if (calendar?.options?.initView === 'oneRowDate') {
+          $homeJQuery('#datepicker').css("visibility", "visible");
+          $homeJQuery('#datepicker').focus();
+        }
+      })
+      const calendar = new MF_AgriCalendar("calendar", [], {
+        initView: 'oneRowMonth',
+        locale: 'ja'
+      });
+      calendar.renderInfoDate = (date) => {
+        if (searched) return moment(date).format('YYYY/MM/DD')
+        else return moment(date).format('DD')
+      }
+      calendar.needUpdateEvents = async () => {
+        loadingModal.show();
+        try {
+          let newEvents = [];
+          const fieldSearch = $homeJQuery('#fieldSearch .select-value-customize').attr('data-value');
+          const userSearch = $homeJQuery('#userSearch .select-value-customize').attr('data-value');
+          const workSearch = $homeJQuery('#workSearch .select-value-customize').attr('data-value');
+          const cropSearch = $homeJQuery('#cropSearch .select-value-customize').attr('data-value');
+          const startDate = $homeJQuery('#startDateSearchPicker').val();
+          const endDate = $homeJQuery('#endDateSearchPicker').val();
+          const allDay = $homeJQuery('#timeOptionSearch').is(':checked');
+          
+          const notStart = $homeJQuery('#workStatusNotStart').prop('checked');
+          const processing = $homeJQuery('#workStatusProcessing').prop('checked');
+          const abnormal = $homeJQuery('#workStatusAbnormal').prop('checked');
+          const completed = $homeJQuery('#workStatusCompleted').prop('checked');
+          
+          let workStatus = [];
+          if (notStart) workStatus.push(WORK_STATUS_NOT_START);
+          if (processing) workStatus.push(WORK_STATUS_PROCESSING);
+          if (abnormal) workStatus.push(WORK_STATUS_ABNORMAL);
+          if (completed) workStatus.push(WORK_STATUS_COMPLETED);
+          
+          let startDateTime = startDate ? moment(startDate).startOf('day') : undefined;
+          let endDateTime = endDate ? moment(endDate).endOf('day') : undefined;
+          if (!allDay && startDateTime && endDateTime) {
+            const startTime = $homeJQuery('#startTimePicker').val();
+            startDateTime.set({ hour: startTime.split(':')[0], minute: startTime.split(':')[1], second: 0 })
+            const endTime = $homeJQuery('#endTimePicker').val();
+            endDateTime.set({ hour: endTime.split(':')[0], minute: endTime.split(':')[1], second: 59 })
+          }
+          console.log(fieldSearch, userSearch, workSearch, cropSearch, startDateTime?.format('YYYY-MM-DD HH:mm:ss'), endDateTime?.format('YYYY-MM-DD HH:mm:ss'));
+          const searchOptions = {
+            fieldSearch,
+            userSearch,
+            workSearch,
+            cropSearch,
+            workStatus
+          }
+          if (searched) {
+            if (workMode == 'ALL'){
+              searchOptions['planStartDateTime'] = startDateTime;
+              searchOptions['planEndDateTime'] = endDateTime;
+              searchOptions['workMode'] = 'ALL';
+            }
+            else {
+              searchOptions['actualStartDateTime'] = startDateTime;
+              searchOptions['actualEndDateTime'] = endDateTime;
+              searchOptions['workMode'] = 'ACTUAL';
+              searchOptions['workStatus'] = [WORK_STATUS_COMPLETED]
+            }
+            newEvents = await searchListWorks(searchOptions);
+            const uniqueDates = new Set();
+            const datesArray = newEvents
+              .map(item => moment(item.start))
+              .filter(date => {
+                const dateString = date.format("YYYY-MM-DD");
+                if (!uniqueDates.has(dateString)) {
+                  uniqueDates.add(dateString);
+                  return true;
+                }
+                return false;
+              });
+            datesArray.sort((a, b) => a - b);
+            calendar.updateDatesArray(datesArray);
+            calendar.updateOptions({ 'isAutoGeneratedDate': false });
+          }
+          else {
+            calendar.updateOptions({ 'isAutoGeneratedDate': true });
+            let arr = calendar.getOffsetDays();
+            let startDate = moment(arr[0]).startOf('day');
+            let endDate = moment(arr[arr.length - 1]).endOf('day');
+            const searchOptions = {
+              workStatus
+            };
+            if (workMode == 'ALL'){
+              searchOptions['planStartDateTime'] = startDate;
+              searchOptions['planEndDateTime'] = endDate;
+              searchOptions['workMode'] = 'ALL';
+            }
+            else {
+              searchOptions['actualStartDateTime'] = startDate;
+              searchOptions['actualEndDateTime'] = endDate;
+              searchOptions['workMode'] = 'ACTUAL';
+            }
+            newEvents = await searchListWorks(searchOptions);
+          }
+          console.log('newEvents', newEvents);
+          const groupBy = {
+            colHeader: [],
+            rowData: [],
+            total: undefined
+          }
+          const groupByCheckBox = $homeJQuery("[id^='group-by-checkbox']:checked");
+          if (groupByCheckBox.length == 0){
+            groupByReset();
+            return;
+          }
+          const groupByFields  = groupByCheckBox.length == 2 ? $homeJQuery(groupByCheckBox[1]).data('groupby').split('-') : $homeJQuery(groupByCheckBox[0]).data('groupby').split('-');
+          
+          if (groupByFields.length != 1){
+            calendar.setRowSwapEnable("disable");
+          }
+          else {
+            calendar.setRowSwapEnable("enable");
+          }
+            
+          if (workMode === 'ACTUAL') {
+            localStorage.setItem(ACTUAL_GROUP_BY_CACHE_KEY, groupByFields.join('-'));
+            
+            groupBy.total = 'timeSpent';
+            calendar.renderEventItem = (event) => {
+              let htmlElm = '';
+              htmlElm = `<div class="calendar-event-item" style="background-color: #8cb591; color: black">
+                  <div style='position: inherit'>${event?.timeSpent}</div>
+                </div>`;
+              return htmlElm;
+            }
+            calendar.renderEventItemDetail = (event) => {
+              let htmlElm = `<ul class="ml-3 p-2">`
+              if (event['担当者']) htmlElm += `<li>${event['担当者']}</li>`;
+              if (event['workTitle']) htmlElm += `<li>${event['workTitle']}</li>`;
+              if (event['start']) htmlElm += `<li>${moment(event['start']).format('HH:mm')} ~ ${moment(event['end']).format('HH:mm')}</li>`;
+              if (event['workField']) htmlElm += `<li>${event['workField']}</li>`;
+              if (event['crop']) htmlElm += `<li>${event['crop']}</li>`;
+              htmlElm += `</ul>`;
+              return htmlElm;
+            }
+  
+            
+          }
+          else {
+            localStorage.setItem(PLAN_GROUP_BY_CACHE_KEY, groupByFields.join('-'));
+            
+            calendar.renderEventItem = (event) => {
+              let htmlElm = '';
+              const groupBy = GROUP_BY.find(o => o['fieldCode'] === groupByFields[0]);
+              let bgColor = BG_COLOR_EVENT_NOT_START;
+              if (!event[EMPLOYEE_ID_FIELD_CODE]){
+                bgColor = BG_COLOR_EVENT_NOT_ASSIGN;
+              }
+              else {
+                if (event[WORK_STATUS_FIELD_CODE] == WORK_STATUS_PROCESSING) {
+                  bgColor = BG_COLOR_EVENT_PROCESSING;
+                }
+                else if (event[WORK_STATUS_FIELD_CODE] == WORK_STATUS_COMPLETED){
+                  bgColor = BG_COLOR_EVENT_COMPLETED;
+                }
+                else if (event[WORK_STATUS_FIELD_CODE] == WORK_STATUS_ABNORMAL){
+                  bgColor = BG_COLOR_EVENT_ABNORMAL;
+                }
+              }
+              if (searched) {
+                htmlElm = `<div class="calendar-event-item" style="background-color: ${bgColor}">`;
+                htmlElm += `<div>`;
+                for (const fieldShow of groupBy['fieldShowOnEventItemMonth']){
+                  if (fieldShow === 'start') htmlElm += moment(event['start']).format('HH:mm') + " ";
+                  else htmlElm += event[fieldShow] + " ";
+                }
+                htmlElm += `</div></div>`;
+              }
+              else {
+                if (calendar.options.initView === 'oneRowMonth') {
+                  htmlElm = `<div class="calendar-event-item" style="background-color: ${bgColor}">`;
+                  htmlElm += `<div>`;
+                  for (const fieldShow of groupBy['fieldShowOnEventItemMonth']){
+                    if (fieldShow === 'start') htmlElm += moment(event['start']).format('HH:mm') + " ";
+                    else htmlElm += event[fieldShow] + " ";
+                  }
+                  htmlElm += `</div></div>`;
+                }
+                else {
+                  htmlElm = `<ul class="calendar-event-item" style="background-color: ${bgColor}">`;
+                  for (const fieldShow of groupBy['fieldShowOnEventItemWeek']){
+                    if (fieldShow === 'start') htmlElm += `<li>${moment(event['start']).format('HH:mm')} ~ ${moment(event['end']).format('HH:mm')}</li>`;
+                    else htmlElm += `<li>${event[fieldShow]}</li>`;
+                  }
+                  htmlElm += `</ul>`;
+                }
+              }
+              return htmlElm;
+            }
+            calendar.renderEventItemDetail = async (event) => {
+              console.log('event', event);
+              console.log('kintoneLoginUser', kintoneLoginUser);
+              console.log('currentUser', currentUser);
+              let completeEventLabel;
+              let htmlElm = ``;
+              if (event["groupId"]){
+                const groupEvents = await workService.getGroupEvents(event["groupId"], "", "ALL_EVENTS_IN_THE_SERIES");
+                const completeEvents = groupEvents.filter(o => o[WORK_STATUS_FIELD_CODE].value == WORK_STATUS_COMPLETED)
+                completeEventLabel = `✅ : ${completeEvents.length} / ${groupEvents.length}` ;
+                htmlElm += `<div style="margin-left: 13px; margin-bottom: 5px">${completeEventLabel}</div>`;
+              }
+              
+              
+              if (event[WORK_STATUS_FIELD_CODE] !== WORK_STATUS_COMPLETED && event[EMPLOYEE_ID_FIELD_CODE]){
+                htmlElm += `<div><button type="button" class="btn btn-sm btn-secondary ml-3" data-log-time-id="${event.eventId}" data-employee-id="${event['employeeId']}">実績を登録</button></div>`;
+              }
+              
+              htmlElm += `<ul class="ml-3 p-2">`;
+              
+              if (event['name']) htmlElm += `<li>${event['name']}</li>`;
+              if (event['workTitle']) htmlElm += `<li>${event['workTitle']}</li>`;
+              if (event['workField']) htmlElm += `<li>${event['workField']}</li>`;
+              if (event['crop']) htmlElm += `<li>${event['crop']}</li>`;
+              if (event['start']) htmlElm += `<li>${moment(event['start']).format('HH:mm')} ~ ${moment(event['end']).format('HH:mm')}</li>`;
+              
+              htmlElm += `</ul>`;
+              return htmlElm;
+            }
+            console.log('groupByFields', groupByFields);
+            
+          }
+          groupBy.colHeader = groupByFields;
+           
+          const groupBySet = new Set();
+          newEvents = newEvents.map(o => {
+            if (!o['担当者']) o['担当者'] = '未設定';
+            return o;
+          })
+          let unique = newEvents.filter(o => {
+            let key = '';
+            for (const field of groupByFields){
+              key += o[field] + "-";
+            }
+            if (!groupBySet.has(key)) {
+              groupBySet.add(key);
+              return true;
+            }
+            return false;
+          });
+          let priorityCache = localStorage.getItem("MF_AGRI_PRIORITY_CACHE_KEY");
+          try {
+            priorityCache = JSON.parse(priorityCache);
+            if (!priorityCache || typeof priorityCache !== "object") {
+              priorityCache = {};
+            }
+          } catch (e) {
+            priorityCache = {};
+          }
+          if (priorityCache[groupByFields[0]]){
+            let orderArray = priorityCache[groupByFields[0]];
+            console.log('Original orderArray:', orderArray);
+            const uniqueValues = new Set(unique.map(item => item[groupByFields[0]]));
+            orderArray = orderArray.filter(value => uniqueValues.has(value));
+        
+            console.log('Filtered orderArray:', orderArray);
+            unique.sort((x, y) => orderArray.indexOf(x[groupByFields[0]]) - orderArray.indexOf(y[groupByFields[0]]));
+          }
+          else {
+            unique.sort((a, b) => {
+              if (a[groupByFields[0]] < b[groupByFields[0]]) return -1;
+              if (a[groupByFields[0]] > b[groupByFields[0]]) return 1;
+              return 0;
+            });
+          }
+          console.log('unique', unique)
+          groupBy.rowData = unique.map(o => {
+            const event = newEvents.find(e => {
+              let check = true;
+              for (const field of groupByFields){
+                check = check && (e[field] === o[field]);
+                if (!check) return false;
+              };
+              return true;
+            });
+            const expectData = {
+              [groupByFields[0]]: event[groupByFields[0]],
+              [groupByFields[1]]: event[groupByFields[1]],
+              data: {
+                [groupByFields[0]]: o[groupByFields[0]],
+                [groupByFields[1]]: o[groupByFields[1]],
+                "employeeId": o["employeeId"]
+              }
+            }
+            // if (groupByFields.includes("担当者")) expectData['data']['employeeId'] = o["employeeId"];
+            return expectData;
+          })
+          console.log('groupBy', groupBy);
+          const newOptions = {
+            'groupBy': groupBy,
+            'hightLightToday': !searched
+          }
+          calendar.updateOptions(newOptions);
+          calendar.updateEvents(newEvents);
+          
+        } catch (e){
+          console.error(e);
+        }
+        loadingModal.hide();
+      }
+      calendar.afterRender = () => {
+        $homeJQuery(`#calendar-center`).html(calendar.getCalenderCenter());
+        $homeJQuery('#datepicker, #monthpicker, #weekpicker').css("visibility", "hidden");
+        const startDate = calendar.getOffsetDays()[0].toDate();
+        console.log('startDate', startDate);
+        if (calendar?.options?.initView === 'oneRowWeek') {
+          $homeJQuery('#weekpicker').datepicker('update', startDate);
+        }
+        else if (calendar?.options?.initView === 'oneRowMonth') {
+          $homeJQuery('#monthpicker').datepicker('update', startDate);
+        }
+        else if (calendar?.options?.initView === 'oneRowDate') {
+          $homeJQuery('#datepicker').datepicker('update', startDate);
+        }
+      }
+      // new event
+      $homeJQuery('#calendar-previous').click(function () {
+        calendar.updateOptions({ offset: +calendar.options.offset - 1 });
+      })
+      $homeJQuery('#calendar-next').click(function () {
+        calendar.updateOptions({ offset: +calendar.options.offset + 1 });
+      })
+      $homeJQuery('#calendar-today').click(function () {
+        calendar.updateOptions({ offset: 0 });
+      })
+      function switchButtonCalendarView() {
+        $homeJQuery('#calendar-oneRowWeek').removeClass('btn-secondary');
+        $homeJQuery('#calendar-oneRowMonth').removeClass('btn-secondary');
+        $homeJQuery('#calendar-oneRowDate').removeClass('btn-secondary');
+        $homeJQuery('#calendar-oneRowWeek').addClass('btn-outline-secondary');
+        $homeJQuery('#calendar-oneRowMonth').addClass('btn-outline-secondary');
+        $homeJQuery('#calendar-oneRowDate').addClass('btn-outline-secondary');
+        if (calendar?.options?.initView === 'oneRowWeek') {
+          $homeJQuery('#calendar-oneRowWeek').removeClass('btn-outline-secondary');
+          $homeJQuery('#calendar-oneRowWeek').addClass('btn-secondary');
+        }
+        else if (calendar?.options?.initView === 'oneRowMonth') {
+          $homeJQuery('#calendar-oneRowMonth').removeClass('btn-outline-secondary');
+          $homeJQuery('#calendar-oneRowMonth').addClass('btn-secondary');
+        }
+        else if (calendar?.options?.initView === 'oneRowDate') {
+          $homeJQuery('#calendar-oneRowDate').removeClass('btn-outline-secondary');
+          $homeJQuery('#calendar-oneRowDate').addClass('btn-secondary');
+        }
+      }
+
+      function switchButtonCalendarWorkMode() {
+        $homeJQuery('#calendar-all-mode').removeClass('btn-secondary');
+        $homeJQuery('#calendar-actual-mode').removeClass('btn-secondary');
+        $homeJQuery('#calendar-all-mode').addClass('btn-outline-secondary');
+        $homeJQuery('#calendar-actual-mode').addClass('btn-outline-secondary');
+        if (workMode === 'ALL') {
+          $homeJQuery('#addNewEvent').text('計画を登録');
+          $homeJQuery('#addNewEvent').show();
+          $homeJQuery('#calendar-all-mode').removeClass('btn-outline-secondary');
+          $homeJQuery('#calendar-all-mode').addClass('btn-secondary');
+        }
+        else if (workMode === 'ACTUAL') {
+          $homeJQuery('#addNewEvent').hide();
+          $homeJQuery('#calendar-actual-mode').removeClass('btn-outline-secondary');
+          $homeJQuery('#calendar-actual-mode').addClass('btn-secondary');
+        }
+      }
+      $homeJQuery('#calendar-oneRowWeek').click(function () {
+        calendar.updateOptions({
+          initView: 'oneRowWeek',
+          offset: 0
+        });
+        switchButtonCalendarView();
+      })
+      $homeJQuery('#calendar-oneRowMonth').click(function () {
+        calendar.updateOptions({
+          initView: 'oneRowMonth',
+          offset: 0
+        });
+        switchButtonCalendarView();
+      })
+      $homeJQuery('#calendar-oneRowDate').click(function () {
+        calendar.updateOptions({
+          initView: 'oneRowDate',
+          offset: 0
+        });
+        switchButtonCalendarView();
+      })
+      $homeJQuery('#calendar-oneRowMonth').trigger('click');
+      switchButtonCalendarView();
+      $homeJQuery(window).on("message", function (event) {
+        if (IFRAME_EVENTS.includes(event.originalEvent.data)) {
+          calendar.needUpdateEvents()
+        }
+      });
+      $homeJQuery('#calendar-all-mode').click(function () {
+        workMode = 'ALL';
+        // show control filter work status
+        $homeJQuery('.control-filter-work-status').show();
+        // change sub tree
+        $homeJQuery("#tree-view-root").empty();
+        for (const item of GROUP_BY) {
+          const fieldCode = item['fieldCode'];
+          const liParentElm = $homeJQuery('<li class="li-parent-tree">');
+          const spanElm = $homeJQuery('<span class="caret-customize" style="margin-left: -15px; margin-right: 10px"></span>');
+          liParentElm.append(spanElm);
+          const inputElm = $homeJQuery(`<input type="checkbox" class="input-parent-tree d-none" id="group-by-checkbox-${fieldCode}" data-groupby="${fieldCode}" />`);
+          const labelElm = $homeJQuery(`<label for="group-by-checkbox-${item['fieldCode']}" class="custom-checkbox">${item['fieldName']}</label>`);
+          const ulSubTreeElm = $homeJQuery('<ul class="nested-customize">')
+          liParentElm.append(inputElm, labelElm, ulSubTreeElm);
+          for (const subItem of item['subFields']) {
+            const subFieldCode = subItem['fieldCode'];
+            ulSubTreeElm.append(`<li>
+              <input type="checkbox" class="input-sub-tree d-none" id="group-by-checkbox-${fieldCode}-${subFieldCode}" data-groupby="${fieldCode}-${subFieldCode}" />
+              <label for="group-by-checkbox-${fieldCode}-${subFieldCode}" class="custom-checkbox">${subItem['fieldName']}</label>
+            </li>`);
+          }
+          $homeJQuery("#tree-view-root").append(liParentElm);
+        }
+        
+        let groupByCache = localStorage.getItem(PLAN_GROUP_BY_CACHE_KEY);
+        if (groupByCache){
+          $homeJQuery(`#group-by-checkbox-${groupByCache}`).prop('checked', true);
+          $homeJQuery(`#group-by-checkbox-${groupByCache}`).trigger('change');
+        }
+        else {
+          groupByReset();
+        }
+        switchButtonCalendarWorkMode();
+
+        calendar.addEvent = (data) => {
+          const popupAddEvent = new AddOrUpdateEventPopup({
+            date: data?.date,
+            employeeId: data?.groupByValue?.data?.employeeId,
+            workId: data?.groupByValue?.data?.workId,
+            crop: data?.groupByValue?.data?.crop,
+            mode: 'ADD',
+            workMode
+          });
+        }
+        calendar.updateEvent = ({eventId, groupAction}) => {
+          console.log('eventId: ', eventId, 'groupAction: ', groupAction)
+          
+          let popupUpdateEvent = new AddOrUpdateEventPopup({ eventId, mode: 'UPDATE', workMode, groupAction: groupAction });
+        }
+        calendar.duplicateEvent = (eventId) => {
+          let popupUpdateEvent = new AddOrUpdateEventPopup({ eventId, mode: 'DUPLICATE', workMode });
+        }
+
+        calendar.removeEvent = async ({eventId, groupAction}) => {
+          try {
+            const record = await workService.getWorkById(eventId);
+            console.log('record: ', record, 'groupAction: ', groupAction);
+            let result = false;
+            let groupEvents = [];
+            if (!groupAction || groupAction == "THIS_EVENT"){
+              groupEvents = [record];
+              if (record[WORK_STATUS_FIELD_CODE].value != WORK_STATUS_NOT_START){
+                result = window.confirm(MF_AGRI_LANGUAGES[language]['DELETE_START_EVENT_CONFIRMATION']);
+              }
+              else {
+                result = window.confirm(MF_AGRI_LANGUAGES[language]['DELETE_CONFIRMATION']);
+              }
+            }
+            else {
+              groupEvents = await workService.getGroupEvents(record[GROUP_ID_FIELD_CODE].value, record['予定日'].value, groupAction);
+              const startEvents = groupEvents.filter(o => o[WORK_STATUS_FIELD_CODE].value != WORK_STATUS_NOT_START);
+              if (startEvents.length > 0){
+                result = window.confirm(MF_AGRI_LANGUAGES[language]['DELETE_START_EVENT_SERIES_CONFIRMATION']);
+              }
+              else {
+                result = window.confirm(MF_AGRI_LANGUAGES[language]['DELETE_CONFIRMATION']);
+              }
+            }
+            if (!result) return;
+            loadingModal.show();
+            const sharepointMapping = MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT?.sharepointMapping;
+            for (const workData of groupEvents){
+              const eventId = workData['$id'].value;
+              
+              await workService.removeWorkById(eventId);
+              
+              if (sharepointMapping?.ID?.kintoneField && workData?.[sharepointMapping.ID.kintoneField]?.value){
+                MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.deleteSharePointItem(workData[sharepointMapping.ID.kintoneField].value);
+              }
+            }
+            loadingModal.hide();
+            alert(MF_AGRI_LANGUAGES[language]['PLAN_DELETION_SUCCESS'])
+          }
+          catch (e){
+            alert(MF_AGRI_LANGUAGES[language]['PLAN_DELETION_FAILURE'])
+          }
+          calendar.needUpdateEvents()  
+        }
+        calendar.needUpdateEvents()
+      })
+      $homeJQuery('#calendar-actual-mode').click(function () {
+        workMode = 'ACTUAL';
+        // hide control filter work status
+        $homeJQuery('.control-filter-work-status').hide();
+        // change sub tree
+        $homeJQuery("#tree-view-root").empty();
+        for (const item of ACTUAL_WORK_GROUP_BY) {
+          const fieldCode = item['fieldCode'];
+          const liParentElm = $homeJQuery('<li class="li-parent-tree">');
+          const spanElm = $homeJQuery('<span style="margin-left: -15px; margin-right: 10px"></span>');
+          liParentElm.append(spanElm);
+          const inputElm = $homeJQuery(`<input type="checkbox" class="input-parent-tree d-none" id="group-by-checkbox-${item['groupByFields'].join('-')}" data-groupby="${item['groupByFields'].join('-')}" />`);
+          const labelElm = $homeJQuery(`<label for="group-by-checkbox-${item['groupByFields'].join('-')}" class="custom-checkbox">${item['fieldName']}</label>`);
+          liParentElm.append(inputElm, labelElm);
+          $homeJQuery("#tree-view-root").append(liParentElm);
+        }
+        
+        let groupByCache = localStorage.getItem(ACTUAL_GROUP_BY_CACHE_KEY);
+        if (groupByCache){
+          $homeJQuery(`#group-by-checkbox-${groupByCache}`).prop('checked', true);
+          $homeJQuery(`#group-by-checkbox-${groupByCache}`).trigger('change');
+        }
+        else {
+          groupByReset();
+        }
+        
+        if (!userPermissions?.ACTUAL_WORK?.ADD) {
+          $homeJQuery('#addNewEvent').hide()
+        }
+        else $homeJQuery('#addNewEvent').show();
+        switchButtonCalendarWorkMode();
+        
+        calendar.addEvent = undefined;
+        calendar.duplicateEvent = undefined;
+        calendar.needUpdateEvents()
+      })
+      switchButtonCalendarWorkMode()
+      $homeJQuery('#calendar-all-mode').trigger('click');
+      // SEARCH
+      
+      $homeJQuery("#openAdvancedSearch").on("click", () => {
+        $("#advancedSearch").show();
+        getMasterData();
+      })
+      
+      $homeJQuery("#closeAdvancedSearch").on("click", () => {
+        $("#advancedSearch").hide();
+        $homeJQuery(".control-date").css("visibility", "visible");
+        searched = false;
+        calendar.needUpdateEvents();
+      })
+      
+      $homeJQuery('#searchBtn').click(function () {
+        $homeJQuery('#startTimePicker-error').text('');
+        $homeJQuery('#endTimePicker-error').text('');
+        $homeJQuery('#startDateSearchPicker-error').text('');
+        $homeJQuery('#endDateSearchPicker-error').text('');
+        $homeJQuery('#dateTimeSearch-error').text('');
+        const allDay = $homeJQuery('#timeOptionSearch').is(':checked');
+        if (!allDay){
+          let check = true;
+          if (!$homeJQuery('#startTimePicker').val()) {
+            $homeJQuery('#startTimePicker-error').text('必須');
+            check = false;
+          }
+          if (!$homeJQuery('#endTimePicker').val()) {
+            $homeJQuery('#endTimePicker-error').text('必須');
+            check = false;
+          }
+          if (!$homeJQuery('#startDateSearchPicker').val()) {
+            $homeJQuery('#startDateSearchPicker-error').text('必須');
+            check = false;
+          }
+          if (!$homeJQuery('#endDateSearchPicker').val()) {
+            $homeJQuery('#endDateSearchPicker-error').text('必須');
+            check = false;
+          }
+          if (!check) return;
+        }
+        
+        const startDateValue = $homeJQuery('#startDateSearchPicker').val();
+        const endDateValue = $homeJQuery('#endDateSearchPicker').val();
+        if (startDateValue && endDateValue) {
+          const startDate = moment(startDateValue);
+          const endDate = moment(endDateValue);
+          const startTimeValue = $homeJQuery('#startTimePicker').val() || "00:00";
+          const endTimeValue = $homeJQuery('#endTimePicker').val() || "00:00";
+          startDate.hour(startTimeValue.split(":")[0]).minute(startTimeValue.split(":")[1]);
+          endDate.hour(endTimeValue.split(":")[0]).minute(endTimeValue.split(":")[1]);
+          if (startDate.isAfter(endDate)) {
+            $homeJQuery('#dateTimeSearch-error').text('開始日は終了日より前です。')
+            return;
+          }
+        }
+
+        $homeJQuery(".control-date").css("visibility", "hidden");
+        searched = true;
+        calendar.options.initView = 'oneRowMonth';
+        calendar.options.offset = 0;
+        switchButtonCalendarView();
+        calendar.needUpdateEvents();
+      })
+      $homeJQuery('#clearSeachBtn').click(function () {
+        $homeJQuery('.search-container input').val(undefined)
+        $homeJQuery('.select-value-customize').attr('data-value', '');
+        $homeJQuery('.select-value-customize').text('');
+        $homeJQuery('.select-search-customize').trigger('input');
+        $homeJQuery('#startTimePicker-error').text('')
+        $homeJQuery('#endTimePicker-error').text('')
+        $homeJQuery('#startDateSearchPicker-error').text('')
+        $homeJQuery('#endDateSearchPicker-error').text('')
+      })
+      $homeJQuery('.select-search-customize').on('input', function () {
+        const inputVal = $homeJQuery(this).val();
+        const optionElm = $homeJQuery(this).next();
+        optionElm.find('li').each(function () {
+          if ($homeJQuery(this).text().indexOf(inputVal) === -1) {
+            $homeJQuery(this).hide();
+          } else {
+            $homeJQuery(this).show();
+          }
+        });
+      });
+      $homeJQuery('.select-options-customize').on('click', 'li', function () {
+        const selectValElm = $homeJQuery(this).parent().parent().parent().find('.select-value-customize');
+        selectValElm.attr('data-value', $homeJQuery(this).data('value'));
+        selectValElm.text($homeJQuery(this).text());
+
+        // hide dropdown list
+        if ($homeJQuery('.select-form-customize').hasClass('show')) {
+          $homeJQuery('.select-form-customize').removeClass('show')
+        }
+        // clear input search
+        $homeJQuery('.select-search-customize').val('');
+        $homeJQuery('.select-search-customize').trigger('input');
+
+      });
+      $homeJQuery('.select-icon-customize').on('click', function () {
+        if ($homeJQuery(this).hasClass('fa-chevron-down')) {
+          $homeJQuery(this).removeClass('fa-chevron-down');
+          $homeJQuery(this).addClass('fa-chevron-up');
+        }
+        else {
+          $homeJQuery(this).removeClass('fa-chevron-up');
+          $homeJQuery(this).addClass('fa-chevron-down');
+        }
+      })
+      $homeJQuery('#addNewEvent').on('click', function () {
+        calendar.addEvent()
+      })
+      $homeJQuery(document).on('click', 'button[data-log-time-id]', function () {
+        const eventId = $homeJQuery(this).data('log-time-id');
+        const employeeId = $homeJQuery(this).data('employee-id');
+        console.log('eventId', eventId);
+        const popupAddEvent = new AddOrUpdateEventPopup({ eventId, workMode, isLogTime: true });
+      })
+
+      /* 
+        FIX DROPDOWN LIST 
+      */
+      $homeJQuery(document).on('click', function (event) {
+        // hide dropdown list
+        if (($homeJQuery(event.target).closest('.select-form-customize').length && $homeJQuery('.select-form-customize').hasClass('show'))
+          || !$homeJQuery(event.target).closest('.select-value-customize').length) {
+          $homeJQuery('.select-form-customize').removeClass('show')
+        }
+        // clear input search
+        $homeJQuery('.select-search-customize').val('');
+        $homeJQuery('.select-search-customize').trigger('input');
+      });
+
+      $homeJQuery('.select-form-customize').on('click', function (event) {
+        event.stopPropagation();
+      });
+
+      $homeJQuery('.select-value-customize').on('click', function (event) {
+        const dataTarget = $homeJQuery(this).data('target');
+        $homeJQuery('.select-form-customize').removeClass('show');
+        $homeJQuery(dataTarget).addClass('show');
+      });
+      
+      // EVENT TRIGGER CHANGE TREE VIEW OPTION
+      $homeJQuery(document).on('change', "[id^='group-by-checkbox']", function (e) {
+        const currentValue = $homeJQuery(e.target).prop('checked');
+        if ($homeJQuery(e.target).hasClass('input-sub-tree')) {
+          $homeJQuery("[id^='group-by-checkbox']").prop('checked', false);
+          $homeJQuery(e.target).prop('checked', currentValue);
+          $homeJQuery(e.target).closest('.li-parent-tree').find('.input-parent-tree').prop('checked', true);
+        }
+        else if ($homeJQuery(e.target).hasClass('input-parent-tree')) {
+          $homeJQuery("[id^='group-by-checkbox']").prop('checked', false);
+          $homeJQuery(e.target).prop('checked', currentValue);
+          const caretElm = $homeJQuery(e.target).closest('.li-parent-tree').find('.caret-customize');
+          if ((currentValue && !caretElm.hasClass('caret-down-customize')) || (!currentValue && caretElm.hasClass('caret-down-customize'))) {
+            caretElm.click();
+          }
+        }
+      });
+      
+      $homeJQuery("#group-by-apply").on('click', function () {
+        calendar.needUpdateEvents();
+      });
+
+      $homeJQuery("#group-by-reset").on('click', function () {
+        groupByReset();
+      });
+      
+      function groupByReset (){
+        $homeJQuery("[id^='group-by-checkbox']").eq(0).prop('checked', true);
+        $homeJQuery("[id^='group-by-checkbox']").eq(0).trigger('change');
+        $homeJQuery('#group-by-apply').trigger('click');
+      }
+      let groupByCache = localStorage.getItem(PLAN_GROUP_BY_CACHE_KEY);
+      if (groupByCache){
+        $homeJQuery(`#group-by-checkbox-${groupByCache}`).prop('checked', true);
+        $homeJQuery(`#group-by-checkbox-${groupByCache}`).trigger('change');
+      }
+      else {
+        groupByReset();
+      }
+
+      document.addEventListener("click", function (e) {
+        if (e.target && e.target.classList.contains("caret-customize")) {
+          e.target.parentElement.querySelector(".nested-customize").classList.toggle("active-customize");
+          e.target.classList.toggle("caret-down-customize");
+        }
+      });
+      
+      $homeJQuery('#toggle-tree-view').on('click', function(){
+        if (showTreeView){
+          $homeJQuery('#toggle-tree-view i').removeClass('fa-toggle-on').addClass('fa-toggle-off');
+          $homeJQuery('#calendar-tree-view').hide();
+        }
+        else {
+          $homeJQuery('#toggle-tree-view i').removeClass('fa-toggle-off').addClass('fa-toggle-on');
+          $homeJQuery('#calendar-tree-view').show();
+        }
+        showTreeView = !showTreeView;
+      })
+      $homeJQuery('.control-filter-work-status input').on('change', function(){
+        calendar.needUpdateEvents();
+      })
+      
+      calendar.rowSwap = ({movedItem, newPosition}) => {
+        console.log('movedItem', movedItem);
+        console.log('newPosition', newPosition);
+        
+        const colHeader = calendar.options.groupBy.colHeader[0];
+        const rowData = calendar.options.groupBy.rowData;
+        let priorities = $("tr[data-groupby-index]").map(function() {
+          return $(this).attr("data-groupby-index");
+        }).get();
+        
+        let prioritiesValue = priorities.map(o => rowData[o][colHeader]);
+        console.log('prioritiesValue', prioritiesValue);
+
+        let priorityCache = localStorage.getItem("MF_AGRI_PRIORITY_CACHE_KEY");
+        try {
+          priorityCache = JSON.parse(priorityCache);
+          if (!priorityCache || typeof priorityCache !== "object") {
+            priorityCache = {};
+          }
+        } catch (e) {
+          priorityCache = {};
+        }
+        
+        if (!priorityCache[colHeader]) {
+          priorityCache[colHeader] = [];
+        }
+        let seen = new Set(prioritiesValue);
+        let allItems = new Set([...priorityCache[colHeader], ...prioritiesValue]);
+        priorityCache[colHeader] = [...prioritiesValue, ...[...allItems].filter(item => !seen.has(item))];
+        console.log('priorityCache', priorityCache);
+        localStorage.setItem("MF_AGRI_PRIORITY_CACHE_KEY", JSON.stringify(priorityCache));
+      }
+    }
+    catch (e) {
+      alert(e.message);
+    }
+  });
+})(jQuery);

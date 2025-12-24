@@ -1,0 +1,215 @@
+/* TimePicker Component */
+(function () {
+    // ===========================
+    //  AUTO-INJECT CSS
+    // ===========================
+    const style = `
+    .tp-input {
+        width: 90px;
+        padding: 6px;
+        font-size: 14px;
+        cursor: pointer;
+        background: white;
+    }
+    .tp-input[disabled] {
+        background: #eee !important;
+        cursor: not-allowed !important;
+    }
+    .tp-popup {
+        position: absolute;
+        background: #fff;
+        border: 1px solid #ccc;
+        padding: 4px;
+        display: none;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        z-index: 99999;
+        border-radius: 4px;
+    }
+    .tp-col {
+        float: left;
+        height: 200px;
+        width: 80px;
+        overflow-y: auto;
+        margin-right: 6px;
+        padding-right: 4px;
+        scrollbar-width: none;
+    }
+    .tp-col::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+    }
+    .tp-item {
+        padding: 4px 6px;
+        cursor: pointer;
+        font-size: 14px;
+        user-select: none;
+    }
+    .tp-item:hover {
+        background: rgba(0,0,0,0.07);
+    }
+    .tp-active {
+        background: #007bff !important;
+        color: white;
+    }
+    `;
+    const css = document.createElement("style");
+    css.innerHTML = style;
+    document.head.appendChild(css);
+
+    // ===========================
+    //  TIME PICKER CLASS
+    // ===========================
+    class TimePicker {
+        constructor(input, options = {}) {
+            this.input = input instanceof jQuery ? input : $(input);
+            
+            if (!this.input.attr("placeholder")) {
+                this.input.attr("placeholder", "--:--");
+            }
+            
+            this.options = {
+                width: options.width || null,
+                height: options.height || null,
+                disabled: options.disabled || false
+            };
+
+            this.selectedHour = null;
+            this.selectedMinute = null;
+
+            this.build();
+            this.applyOptions();
+            this.attachEvents();
+        }
+
+        // create popup
+        build() {
+            this.popup = $(`
+                <div class="tp-popup">
+                    <div class="tp-col tp-hours"></div>
+                    <div class="tp-col tp-minutes"></div>
+                    <div style="clear:both"></div>
+                </div>
+            `);
+
+            $("body").append(this.popup);
+
+            for (let h = 0; h < 24; h++) {
+                this.popup.find(".tp-hours").append(
+                    `<div class="tp-item" data-h="${h}">${String(h).padStart(2, '0')}</div>`
+                );
+            }
+            for (let m = 0; m < 60; m++) {
+                this.popup.find(".tp-minutes").append(
+                    `<div class="tp-item" data-m="${m}">${String(m).padStart(2, '0')}</div>`
+                );
+            }
+        }
+
+        // Apply UI option
+        applyOptions() {
+            if (this.options.width) {
+                this.input.css("width", this.options.width);
+            }
+
+            if (this.options.height) {
+                this.popup.find(".tp-col").css("height", this.options.height);
+            }
+
+            if (this.options.disabled) {
+                this.input.attr("disabled", true);
+                this.popup.hide();
+            } else {
+                this.input.removeAttr("disabled");
+            }
+        }
+
+        // event
+        attachEvents() {
+            this.input.on("keydown keypress input paste", e => e.preventDefault());
+            this.input.on("mousedown", e => e.preventDefault());
+            this.input.on("contextmenu", e => e.preventDefault());
+            
+            this.input.on("click", (e) => {
+                if (this.options.disabled) return;
+
+                e.stopPropagation();
+                const off = this.input.offset();
+                this.popup.css({
+                    top: off.top + this.input.outerHeight(),
+                    left: off.left
+                }).toggle();
+            });
+
+            this.popup.on("click", ".tp-hours .tp-item", (e) => {
+                e.stopPropagation();
+                this.popup.find(".tp-hours .tp-item").removeClass("tp-active");
+                $(e.target).addClass("tp-active");
+                this.selectedHour = $(e.target).text().trim();
+
+                if (this.selectedMinute !== null) this.apply();
+            });
+
+            this.popup.on("click", ".tp-minutes .tp-item", (e) => {
+                e.stopPropagation();
+                this.popup.find(".tp-minutes .tp-item").removeClass("tp-active");
+                $(e.target).addClass("tp-active");
+                this.selectedMinute = $(e.target).text().trim();
+
+                if (this.selectedHour !== null) this.apply();
+            });
+
+            $(document).on("click", () => this.popup.hide());
+        }
+
+        // Apply value to input
+        apply() {
+            this.input.val(`${this.selectedHour}:${this.selectedMinute}`);
+            this.popup.hide();
+            this.input.trigger("change");
+        }
+
+        // API GET
+        getValue() {
+            return this.input.val().trim();
+        }
+
+        // API SET
+        setValue(hhmm) {
+            if (this.options.disabled) return;
+
+            this.input.val(hhmm);
+            const [h, m] = hhmm.split(":");
+
+            this.selectedHour = h;
+            this.selectedMinute = m;
+
+            this.popup.find(".tp-hours .tp-item").removeClass("tp-active");
+            this.popup.find(`.tp-hours .tp-item[data-h='${parseInt(h)}']`).addClass("tp-active");
+
+            this.popup.find(".tp-minutes .tp-item").removeClass("tp-active");
+            this.popup.find(`.tp-minutes .tp-item[data-m='${parseInt(m)}']`).addClass("tp-active");
+            
+            this.input.trigger("change");
+        }
+
+        clear() {
+            if (this.options.disabled) return;
+
+            this.selectedHour = null;
+            this.selectedMinute = null;
+            this.input.val("");
+            this.popup.find(".tp-item").removeClass("tp-active");
+        }
+
+        updateOptions(newOptions = {}) {
+            Object.assign(this.options, newOptions);
+            this.applyOptions();
+        }
+    }
+
+    // ================================
+    //  EXPORT GLOBAL
+    // ================================
+    window.TimePickerCustomize = TimePicker;
+
+})();

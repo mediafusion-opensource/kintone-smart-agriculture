@@ -1,0 +1,89 @@
+/* 
+  mf-kintone-services
+*/
+(() => {
+  'use strict';
+  window.MF_KINTONE_SERVICES = {
+    createCursor: async (body) => {
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/records/cursor', true), 'POST', body, function (resp) {
+            resolve(resp);
+        }, function (error) {
+            reject(error);
+        });
+      });
+    },
+    getRecordByCursor: async (cursor) => {
+      var body = {
+          'id': cursor.id
+      };
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/records/cursor', true), 'GET', body, function (resp) {
+            // success
+            let records = resp.records;
+            if (resp.next) {
+                resolve(MF_KINTONE_SERVICES.getRecordByCursor(cursor)
+                    .then(nextRecords => records.concat(nextRecords)).catch(e => {
+                        console.error(e);
+                    }));
+            }
+            resolve(records);
+        }, function (error) {
+            // error
+            reject(error);
+        });
+      })
+    },
+    getAllRecords: async (body) => {
+      const cursor = await MF_KINTONE_SERVICES.createCursor(body);
+      let allRecords = await MF_KINTONE_SERVICES.getRecordByCursor(cursor);
+      return allRecords;
+    },
+    addRecord: async (body) => {
+      return new Promise((resolve, reject) => {
+          kintone.api(kintone.api.url('/k/v1/record', true), 'POST', body, function (resp) {
+            resolve(resp);
+          }, function (error) {
+            reject(error);
+          });
+      });
+    },
+    getRecord: async (body) => {
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/record.json', true), 'GET', body, function (resp) {
+            let record = resp.record;
+            resolve(record);
+        }, function (error) {
+            reject(error);
+        });
+      })
+    },
+    updateRecord: async (body) => {
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/record.json', true), 'PUT', body, function (resp) {
+            resolve(resp);
+        }, function (error) {
+            reject(error);
+        });
+      })
+    },
+    deleteRecords: async (appId, recordIdsDelete) => {
+      for (let i = 0; i < recordIdsDelete.length; i += 100) {
+        const batchIds = recordIdsDelete.slice(i, i + 100);
+        await new Promise((resolve, reject) => {
+            kintone.api(kintone.api.url('/k/v1/records', true), 'DELETE', { app: appId, ids: batchIds }, function (resp) {
+                resolve(resp);
+            }, function (error) {
+                reject(error);
+            });
+        });
+      }
+    },
+    getUserGroups: async (userCode) => {
+      const body = {
+        'code': userCode
+      };
+      return kintone.api(kintone.api.url('/v1/user/groups.json', true), 'GET', body);
+    }
+  }
+})();

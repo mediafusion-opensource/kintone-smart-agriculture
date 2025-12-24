@@ -1,0 +1,1364 @@
+(() => {
+    'use strict';
+    // Dependencies Injection
+    const workService = MF_AGRI_SERVICES.WORK_SERVICES;
+    const breakTimeService = MF_AGRI_SERVICES.BREAK_TIME_SERVICES;
+    
+    const USER_TYPE_CREATE_FIELD_CODE = "作成者区分";
+    const USER_TYPE_ADMIN = "管理者";
+    const USER_TYPE_FARMER = "作業者";
+    
+    const MAKE_RECURRING_FIELD_CODE = 'MAKE_RECURRING';
+    const WORK_STATUS_FIELD_CODE = '作業ステータス';
+    const ALERT_EVENT_HAS_BEEN_CHANGED = '新しい作業が割り当てられたまたは担当している作業の内容が更新されました。';
+    const EMPLOYEE_ID_FIELD_CODE = '社員コード';
+    const USER_SELECTION_FIELD_CODE = 'ユーザーの選択';
+    const EMPLOYEE_NAME_FIELD_CODE = '作業者名';
+    const FULL_NAME_FIELD_CODE = '氏名';
+    const EMAIL_FIELD_CODE = 'メールアドレス';
+    const PLAN_START_DATE_TIME_FIELD_CODE = '計画_開始時刻';
+    const PLAN_END_DATE_TIME_FIELD_CODE = '計画_終了時刻';
+    const WORK_ID_FIELD_CODE = '作業コード';
+    const WORK_NAME_FIELD_CODE = '作業名';
+    const CROPPING_FIELD_CODE = '作付';
+    const FIELD_FIELD_CODE = '圃場';
+    const FIELD_ID_FIELD_CODE = '圃場ID';
+    const SECTION_FIELD_CODE = '区画';
+    const SECTION_TABLE_FIELD_CODE = '詳細';
+    const GROUP_ID_FIELD_CODE = 'グループID';
+    const KINTONE_OR_SHAREPOINT_USER_FIELD_CODE = 'スマホアプリの利用設定';
+    const COLUMN_DETAIL_FIELD_CODE = '列詳細';
+    const TOTAL_COLUMN_FIELD_CODE = '列数';
+    const ACTUAL_COLUMN_FIELD_CODE = '区画_実績';
+    
+    const PLAN_DATE_FIELD_CODE = '予定日';
+    const WORK_MASTER_ID_FIELD_CODE = '作業コード';
+    const WORK_MASTER_NAME_FIELD_CODE = '作業名';
+    const REMASK_FIELD_CODE = '備考';
+    const PERFORMANCE_UNIT_FIELD_CODE = '実績単位';
+    const CROP_FIELD_CODE = '作付';
+    const VARIETY_FIELD_CODE = '品種';
+    
+    const WORK_STATUS_NOT_START = '未対応';
+    const WORK_STATUS_PROCESSING = '処理中';
+    const WORK_STATUS_COMPLETED = '完了';
+    const WORK_STATUS_ABNORMAL = '異常';
+  
+    const ACTUAL_WORKER_FIELD_CODE = '実際_社員コード';
+    const ACTUAL_EMAIL_FIELD_CODE = '実際_メールアドレス';
+    const ACTUAL_WORKER_NAME_FIELD_CODE = '実際_作業者名';
+    const ACTUAL_DATE_FIELD_CODE = '作業日';
+    const ACTUAL_START_DATE_TIME_FIELD_CODE = '実績_開始時刻';
+    const ACTUAL_END_DATE_TIME_FIELD_CODE = '実績_終了時刻';
+    const BREAK_TIME_FIELD_CODE = '休憩時間';
+    const TOTAL_BREAK_TIME_FIELD_CODE = '休憩時間合計';
+    const TIME_SPENT_FIELD_CODE = '作業時間';
+    const TABLE_BREAK_TIME_FIELD_CODE = '休憩履歴';
+    const BREAK_TIME_NAME_FIELD_CODE = '休憩名';
+    const START_BREAK_TIME_FIELD_CODE = '休憩開始';
+    const END_BREAK_TIME_FIELD_CODE = '休憩終了';
+    
+    const MASTER_START_BREAK_TIME_FIELD_CODE = '開始';
+    const MASTER_END_BREAK_TIME_FIELD_CODE = '終了';
+    
+    const SHAREPOINT_ID_FIELD_CODE = 'SharePointID';
+    const SHAREPOINT_LAST_MODIFIED_FIELD_CODE = 'SharePointLastModified';
+    
+    const FIELD_SHAREPOINT_ID_FIELD_CODE = '圃場_SharePointID';
+    const CROP_SHAREPOINT_ID_FIELD_CODE = '作付_SharePointID';
+    const WORK_SHAREPOINT_ID_FIELD_CODE = '作業_SharePointID';
+    const RECORD_NUMBER_FIELD_CODE = '計画ID';
+    
+    const START_MUST_LESS_THEN_END = '開始日は終了日より前です。';
+    const REQUIRED = '必須です。';
+    const CHOICE = '選択';
+    const SEARCH_THREE_DOT = '検索。。。';
+    const NO_RESULTS_FOUND = '結果が見つかりません';
+    const DETELE = '削除';
+    
+    const APP_ID = kintone.app.getId();
+    const FORM_DATA = cybozu.data.page['FORM_DATA'];
+    const ELEMENT_FIELD_ID = {};
+    const fieldList = FORM_DATA.schema.table.fieldList;
+    let listUsers = [];
+    let multiUserForPlan = [];
+    
+    for (const fieldId of Object.keys(fieldList)){
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+    for (const subTableId of Object.keys(FORM_DATA.schema.subTable)){
+      ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+      const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+      for (const fieldId of Object.keys(fieldList)){
+        ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+      }
+    }
+    async function getUserMasterById(userId){
+      try {
+        const query = `${EMPLOYEE_ID_FIELD_CODE} = "${userId}"`;
+        const result = await kintone.api(kintone.api.url('/k/v1/records.json', true),'GET', {app: USER_MASTER_APP_ID, query: query, size: 1})
+        console.log('result', result);
+        const record = result?.records?.[0]
+        if (!record) return undefined;
+        return {
+          code: record[USER_SELECTION_FIELD_CODE].value[0].code,
+          name: record[USER_SELECTION_FIELD_CODE].value[0].name
+        }
+      }
+      catch (e){
+        console.log(e)
+      }
+    }
+    async function getAllUserMaster(fields = []) {
+      let allRecords = [];
+      let offset = 0;
+      const limit = 500;
+    
+      try {
+        while (true) {
+          const result = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', {
+            app: USER_MASTER_APP_ID,
+            fields,
+            query: `limit ${limit} offset ${offset}`
+          });
+    
+          allRecords = allRecords.concat(result.records);
+    
+          if (result.records.length < limit) {
+            break;
+          }
+    
+          offset += limit;
+        }
+    
+        console.log('All records:', allRecords);
+        return allRecords; 
+      } catch (e) {
+        console.log(e);
+      }
+    }
+    async function getSectionByFieldID(fieldID) {
+      return new Promise((resolve, reject) => {
+        kintone.api(kintone.api.url('/k/v1/record', true), 'GET', {
+            app: FIELD_MASTER_APP_ID,
+            id: fieldID
+        }, (resp) => {
+            resolve(resp?.record?.[SECTION_TABLE_FIELD_CODE]?.value);
+        }, (error) => {
+            reject(error);
+        });
+      });
+    }
+    async function addMultipleRecords(records, appId = APP_ID) {
+      const BATCH_SIZE = 1;
+      let start = 0;
+  
+      try {
+          while (start < records.length) {
+              const batchRecords = records.slice(start, start + BATCH_SIZE);
+              const response = await kintone.api(kintone.api.url('/k/v1/records.json', true), 'POST', {
+                  app: appId,
+                  records: batchRecords
+              });
+  
+              console.log(`Batch added successfully. Response:`, response);
+              const kintoneID = response['ids'][0];
+              batchRecords[0]['$id'] = {value: kintoneID};
+              await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.createSharePointItem(batchRecords[0]).then(result => console.log(result)).catch(error => console.log(error));
+              start += BATCH_SIZE;
+          }
+  
+          console.log('All records added successfully.');
+      } catch (error) {
+          console.error('Error adding records:', error);
+      }
+    }
+    const loadingModal = $(`<div class="custom-modal">
+      <div class="custom-modal-content">
+          <div class="custom-loader"></div>
+      </div>
+    </div>`);
+    $('body').append(loadingModal);
+      
+    
+    kintone.events.on([
+      'app.record.create.show', 
+      'app.record.edit.show',
+    ],(event) => {
+      kintone.app.record.setFieldShown(GROUP_ID_FIELD_CODE, false);
+      kintone.app.record.setFieldShown(FIELD_ID_FIELD_CODE, false);
+      kintone.app.record.setFieldShown(USER_TYPE_CREATE_FIELD_CODE, false);
+      
+      const urlParams = new URLSearchParams(window.location.search || window.location.hash);
+      const popup = urlParams.get('popup');
+      if (popup != "true") return event;
+      const isLogTime = urlParams.get('isLogTime') == "true";
+      if (isLogTime){
+        setTimeout(() => {
+          const record = kintone.app.record.get().record;
+          record[WORK_STATUS_FIELD_CODE].value = WORK_STATUS_COMPLETED;
+          kintone.app.record.set({record: record});
+        }, 1)
+      }
+      $('.gaia-argoui-app-titlebar.gaia-argoui-app-titlebar-has-icon').hide();
+      // hide cancel button
+      $('#appForm-gaia button.gaia-ui-actionmenu-cancel').hide();
+      $('#appForm-gaia button.gaia-ui-actionmenu-save').css('marginLeft', 0);
+      // hide menu
+      $('.gaia-argoui-app-infobar-breadcrumb-iconlist').hide();
+      return event;
+    })
+    
+    // check assign 
+    let planIsAssigned = false; 
+    kintone.events.on(['app.record.edit.show'], (event) => {
+      const record = event.record;
+      if (record[EMAIL_FIELD_CODE].value){
+        planIsAssigned = true;
+      }
+      return event;
+    })
+    
+    kintone.events.on([
+      'app.record.create.show',
+      'app.record.edit.show',
+    ],(event) => {
+      if (event.type == 'app.record.edit.show' && planIsAssigned == true) return event;
+      
+      const urlParams = new URLSearchParams(window.location.search || window.location.hash);
+      const popup = urlParams.get('popup');
+      if (popup != "true") return event;
+      const date = urlParams.get('date');
+      const employeeId = urlParams.get('employeeId');
+      if (date || employeeId){
+        setTimeout(() => {
+          const record = kintone.app.record.get().record;
+          if (date) record[PLAN_DATE_FIELD_CODE].value = date;
+          if (employeeId) {
+            record[EMPLOYEE_ID_FIELD_CODE].value = employeeId;
+          }
+          kintone.app.record.set({record: record});
+          if (employeeId) {
+            setTimeout(() => {
+              $(`.field-${ELEMENT_FIELD_ID[EMPLOYEE_ID_FIELD_CODE]} .input-lookup-gaia`).click();
+            }, 1000)
+          }
+        }, 100)
+      }
+      
+      $(` .field-${ELEMENT_FIELD_ID[EMPLOYEE_ID_FIELD_CODE]}, 
+          .field-${ELEMENT_FIELD_ID[EMPLOYEE_NAME_FIELD_CODE]}, 
+          .field-${ELEMENT_FIELD_ID[EMAIL_FIELD_CODE]}
+      `).hide();
+      
+      $(`.field-${ELEMENT_FIELD_ID[EMPLOYEE_ID_FIELD_CODE]}`).parent().append(`<div class="control-gaia">
+        <div style="padding: 5px">
+          <h3 class="control-label-gaia">社員</h3>
+          <div class="custom-dropdown">
+              <button class="btn btn-sm btn-info" id="dropdown-button">${CHOICE}</button>
+              <div class="dropdown-items" id="dropdown-items">
+                  <input type="text" id="search-input" placeholder="${SEARCH_THREE_DOT}">
+                  <div class="no-results" style="display: none;">${NO_RESULTS_FOUND}</div>
+              </div>
+          </div>
+          
+          <ul id="userForPlan" style="list-style: disc; padding: 15px 15px 0 15px"></ul>
+        </div>
+      </div>`);
+      
+      $('#dropdown-button').on('click', function() {
+          $('#dropdown-items').toggle();
+          $('#search-input').val('');
+          filterOptions('');
+      });
+  
+      $(document).on('click', function(e) {
+          if (!$(e.target).closest('.custom-dropdown').length) {
+              $('#dropdown-items').hide();
+          }
+      });
+  
+      $('#search-input').on('input', function() {
+          filterOptions($(this).val().toLowerCase());
+      });
+  
+      function filterOptions(searchValue) {
+          let isFound = false;
+          $('#dropdown-items div[value]').each(function() {
+              if ($(this).text().toLowerCase().includes(searchValue)) {
+                  $(this).show();
+                  isFound = true;
+              } else {
+                  $(this).hide();
+              }
+          });
+          $('.no-results').toggle(!isFound);
+      }
+  
+      $('#dropdown-items').on('click', 'div[value]', function() {
+          $('#dropdown-items').hide();
+      });
+      
+      
+      
+      getAllUserMaster([EMPLOYEE_ID_FIELD_CODE, FULL_NAME_FIELD_CODE, EMAIL_FIELD_CODE, KINTONE_OR_SHAREPOINT_USER_FIELD_CODE]).then(result => {
+        listUsers = result;
+        for (const item of result){
+          $('.dropdown-items').append(`<div value="${item[EMPLOYEE_ID_FIELD_CODE].value}">${item[EMPLOYEE_ID_FIELD_CODE].value} - ${item[FULL_NAME_FIELD_CODE].value}</div>`);
+        }
+        setTimeout(() => {
+          const record = kintone.app.record.get().record;
+          const employeeId = record[EMPLOYEE_ID_FIELD_CODE].value;
+          $(`div[value=${employeeId}]`).click();
+        }, 1000);
+      });
+      $('#dropdown-items').on('click', 'div[value]', function() {
+          let selectedValue = $(this).attr('value');
+          let selectedUser = listUsers.find(o => o[EMPLOYEE_ID_FIELD_CODE].value === selectedValue);
+          
+          if (selectedUser && !multiUserForPlan.find(o => o[EMPLOYEE_ID_FIELD_CODE].value === selectedValue)) {
+            multiUserForPlan.push(selectedUser)
+          }
+          
+          $("#userForPlan").empty();
+          for (const item of multiUserForPlan){
+            const btnRemove = $(`<button class="btn btn-sm btn-danger">${DETELE}</button>`);
+            const liTag = $(`<li style="margin-bottom: 10px"><span style="width: 200px; display: inline-block">${item[EMPLOYEE_ID_FIELD_CODE].value} - ${item[FULL_NAME_FIELD_CODE].value}</span></li>`);
+            liTag.append(btnRemove);
+            $("#userForPlan").append(liTag);
+            btnRemove.on('click', function(){
+              liTag.remove();
+              multiUserForPlan = multiUserForPlan.filter(o => o[EMPLOYEE_ID_FIELD_CODE].value !== item[EMPLOYEE_ID_FIELD_CODE].value);
+              console.log('multiUserForPlan', multiUserForPlan);
+            })
+          }
+      });
+      
+      return event;
+    });
+    /* customize make recurring */
+    let startRepeatDate;
+    let endRepeatDate;
+    let intervalRepeatWeeks;
+    let selectedRepeatDays;
+    function getRepeatDescription(options, startDate, endDate) {
+      const weekdaysMap = {
+          "on_sunday": "日曜日",
+          "on_monday": "月曜日",
+          "on_tuesday": "火曜日",
+          "on_wednesday": "水曜日",
+          "on_thursday": "木曜日",
+          "on_friday": "金曜日",
+          "on_saturday": "土曜日"
+      };
+  
+      const positionMap = {
+          "first": "第1",
+          "second": "第2",
+          "third": "第3",
+          "fourth": "第4",
+          "last": "最後"
+      };
+  
+      const monthMap = {
+          "january": "1月", "february": "2月", "march": "3月", "april": "4月",
+          "may": "5月", "june": "6月", "july": "7月", "august": "8月",
+          "september": "9月", "october": "10月", "november": "11月", "december": "12月"
+      };
+  
+      const { repeatType, rule, repeatInterval = 1 } = options;
+      const start = moment(startDate).format("YYYY/MM/DD");
+      const end = moment(endDate).format("YYYY/MM/DD");
+  
+      let text = "";
+  
+      if (repeatType === "day") {
+          text = `毎${repeatInterval > 1 ? repeatInterval + "日" : "日"}、${start}から${end}まで`;
+      }
+  
+      else if (repeatType === "week") {
+          let days = rule.split(",").map(day => weekdaysMap[day.trim()]);
+          let dayText = days.join("と");
+          text = `毎週${dayText}、${start}から${end}まで`;
+          if (repeatInterval > 1) text = `毎${repeatInterval}週間、${dayText}、${start}から${end}まで`;
+      }
+  
+      else if (repeatType === "month") {
+          let parts = rule.split("_");
+          if (parts[1] === "day") {
+              let day = parseInt(parts[2]);
+              text = `毎月${day}日、${start}から${end}まで`;
+              if (repeatInterval > 1) text = `毎${repeatInterval}ヶ月の${day}日、${start}から${end}まで`;
+          } else if (parts[1] === "the") {
+              let pos = positionMap[parts[2]];
+              let day = weekdaysMap["on_" + parts[3]];
+              text = `毎月の${pos}${day}、${start}から${end}まで`;
+              if (repeatInterval > 1) text = `毎${repeatInterval}ヶ月の${pos}${day}、${start}から${end}まで`;
+          }
+      }
+  
+      else if (repeatType === "year") {
+          let parts = rule.split("_");
+          if (parts[1] === "day") {
+              let day = parseInt(parts[2]);
+              let month = monthMap[parts[4].toLowerCase()];
+              text = `毎年${month}${day}日、${start}から${end}まで`;
+              if (repeatInterval > 1) text = `毎${repeatInterval}年の${month}${day}日、${start}から${end}まで`;
+          } else if (parts[1] === "the") {
+              let pos = positionMap[parts[2]];
+              let day = weekdaysMap["on_" + parts[3].toLowerCase()];
+              let month = monthMap[parts[5].toLowerCase()];
+              text = `毎年${month}の${pos}${day}、${start}から${end}まで`;
+              if (repeatInterval > 1) text = `毎${repeatInterval}年の${month}の${pos}${day}、${start}から${end}まで`;
+          }
+      }
+  
+      return text;
+    }
+
+    function getRepeatDates(options, startDate, endDate) {
+      const weekdaysMap = {
+          "on_sunday": 0, "on_monday": 1, "on_tuesday": 2, "on_wednesday": 3,
+          "on_thursday": 4, "on_friday": 5, "on_saturday": 6
+      };
+      const positionMap = { "first": 1, "second": 2, "third": 3, "fourth": 4, "last": "last" };
+  
+      const { repeatType, rule, repeatInterval = 1 } = options;
+      const start = moment(startDate).startOf("day");
+      const end = moment(endDate).endOf("day");
+      let result = [];
+  
+      if (repeatType === "day") {
+          for (let d = start.clone(); d.isSameOrBefore(end); d.add(repeatInterval, "days")) {
+              result.push(d.format("YYYY-MM-DD"));
+          }
+      }
+  
+      else if (repeatType === "week") {
+          let daysOfWeek = rule.split(",").map(day => day.trim());
+          for (let d = start.clone(); d.isSameOrBefore(end); d.add(repeatInterval, "weeks")) {
+              for (let day of daysOfWeek) {
+                  let checkDate = d.clone().isoWeekday(weekdaysMap[day]);
+                  if (checkDate.isSameOrAfter(start) && checkDate.isSameOrBefore(end)) {
+                      result.push(checkDate.format("YYYY-MM-DD"));
+                  }
+              }
+          }
+      }
+  
+      else if (repeatType === "month") {
+          let parts = rule.split("_");
+  
+          if (parts[1] === "day") {
+              // "on_day_15"
+              let dayOfMonth = parseInt(parts[2]);
+              for (let d = start.clone(); d.isSameOrBefore(end); d.add(repeatInterval, "months")) {
+                  let newDate = d.clone().date(dayOfMonth);
+                  if (newDate.isSameOrBefore(end)) result.push(newDate.format("YYYY-MM-DD"));
+              }
+          } else if (parts[1] === "the") {
+              // "on_the_first_Monday", "on_the_last_Friday"
+              let position = positionMap[parts[2]];
+              let weekday = weekdaysMap["on_" + parts[3]];
+  
+              for (let d = start.clone(); d.isSameOrBefore(end); d.add(repeatInterval, "months")) {
+                  let tempDate = d.clone().startOf("month");
+  
+                  if (position === "last") {
+                      // get last day of month
+                      tempDate.endOf("month").isoWeekday(weekday);
+                  } else {
+                      // get first, second, third, fourth day
+                      tempDate.isoWeekday(weekday);
+                      if (tempDate.month() !== d.month()) tempDate.add(7, "days");
+                      tempDate.add((position - 1) * 7, "days");
+                  }
+  
+                  if (tempDate.isSameOrBefore(end)) result.push(tempDate.format("YYYY-MM-DD"));
+              }
+          }
+      }
+  
+      else if (repeatType === "year") {
+        let parts = rule.split("_");
+    
+        if (parts[1] === "day") {
+            // Case: "on_day_25_of_March"
+            let day = parseInt(parts[2]);
+            let month = moment().month(parts[4]).month(); //Get month form text (January -> 0)
+    
+            for (let d = start.clone(); d.isSameOrBefore(end); d.add(repeatInterval, "years")) {
+                let newDate = d.clone().month(month).date(day);
+                if (newDate.isSameOrBefore(end) && newDate.isSameOrAfter(start)) {
+                    result.push(newDate.format("YYYY-MM-DD"));
+                }
+            }
+        } else if (parts[1] === "the") {
+            // Case: "on_the_last_Tuesday_of_March"
+            let position = parts[2]; // "first", "second", ..., "last"
+            let weekday = moment().day(parts[3]).day(); // Get index of day in week (0-6)
+            let month = moment().month(parts[5]).month(); // Get month form text (January -> 0)
+    
+            for (let d = start.clone(); d.isSameOrBefore(end); d.add(repeatInterval, "years")) {
+                let foundDate = null;
+                let tempDate = d.clone().month(month).startOf("month");
+    
+                if (position === "last") {
+                    tempDate = d.clone().month(month).endOf("month");
+                    while (tempDate.day() !== weekday) {
+                        tempDate.subtract(1, "day");
+                    }
+                    foundDate = tempDate;
+                } else {
+                    // Get first, second, third, fourth
+                    let positionMap = { "first": 1, "second": 2, "third": 3, "fourth": 4 };
+                    let count = 0;
+                    while (tempDate.month() === month) {
+                        if (tempDate.day() === weekday) {
+                            count++;
+                            if (count === positionMap[position]) {
+                                foundDate = tempDate.clone();
+                                break;
+                            }
+                        }
+                        tempDate.add(1, "day");
+                    }
+                }
+    
+                if (foundDate && foundDate.isSameOrBefore(end) && foundDate.isSameOrAfter(start)) {
+                    result.push(foundDate.format("YYYY-MM-DD"));
+                }
+              }
+            }
+      }
+  
+      return result;
+    }
+    function getDayAttributes(date, option) {
+      const d = new Date(date);
+      const day = d.getDate();
+      const month = d.toLocaleString("en-US", { month: "long" });
+      const weekday = d.toLocaleString("en-US", { weekday: "long" });
+  
+      // Determine the first day of the month
+      const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+  
+      // Find all occurrences of the same weekday in the month
+      let occurrences = [];
+      for (let temp = new Date(firstDay); temp.getMonth() === d.getMonth(); temp.setDate(temp.getDate() + 1)) {
+          if (temp.getDay() === d.getDay()) occurrences.push(new Date(temp));
+      }
+  
+      // Determine the position of the date in the month
+      let weekIndex = occurrences.findIndex(dateObj => dateObj.getDate() === day) + 1;
+      let position = weekIndex === occurrences.length ? "last" : ["first", "second", "third", "fourth"][weekIndex - 1];
+  
+      let result = [];
+  
+      if (option === "month") {
+          result.push({
+              value: `on_day_${day}`,
+              label: `On day ${day}`
+          });
+          result.push({
+              value: `on_the_${position}_${weekday.toLowerCase()}`,
+              label: `On the ${position} ${weekday}`
+          });
+      }
+  
+      if (option === "year") {
+          result.push({
+              value: `on_day_${day}_of_${month.toLowerCase()}`,
+              label: `On day ${day} of ${month}`
+          });
+          result.push({
+              value: `on_the_${position}_${weekday.toLowerCase()}_of_${month.toLowerCase()}`,
+              label: `On the ${position} ${weekday} of ${month}`
+          });
+      }
+  
+      return result;
+    }
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+    let repeatEventSettings;
+    
+    kintone.events.on([
+      'app.record.create.show'
+    ], function(event){
+      if ($('#repeat-popup').length == 0){
+        let repeatInterval = `<select id="repeat-interval" style="width: 50px">`;
+        for (let i = 1; i <= 99; i++){
+          repeatInterval += `<option value="${i}">${i}</option>`
+        }
+        repeatInterval += `</select>`; 
+        
+        $('body').append(`
+          <div class="repeat-popup-overlay" id="repeat-popup">
+            <div class="repeat-popup-container">
+                <h5 class="text-center"><b>繰り返し設定</b></h5>
+                <div class="d-flex flex-column">
+                  <span>開始日</span>
+                  <input type="date" id="repeat-start-date">
+                </div>
+                <div class="d-flex flex-column">
+                  <span>終了日</span>
+                  <input type="date" id="repeat-end-date">
+                </div>
+                <br><br>
+                <label>毎回繰り返す</label>
+                ${
+                  repeatInterval
+                }
+                <select id="interval-mode" style="width: 50px">
+                  <option value="day">日</option>
+                  <option value="week">週</option>
+                  <option value="month">月</option>
+                  <option value="year">年</option>
+                </select>
+                <div class="repeat-days">
+                    <div class="repeat-day" data-day="1">月</div>
+                    <div class="repeat-day" data-day="2">火</div>
+                    <div class="repeat-day" data-day="3">水</div>
+                    <div class="repeat-day" data-day="4">木</div>
+                    <div class="repeat-day" data-day="5">金</div>
+                    <div class="repeat-day" data-day="6">土</div>
+                    <div class="repeat-day" data-day="0">日</div>
+                </div>
+                
+                <select id="repeat-fixed-days" style="width: 100%"></select>
+                
+                <div id="repeat-output"></div>
+                
+                <div class="d-flex">
+                  <button class="repeat-button repeat-save mr-2">Save</button>
+                  <button class="repeat-button repeat-discard">Discard</button>
+                </div>
+                
+            </div>
+        </div>
+        `)
+      }
+      
+      const makeRecurringBtn = $(`<button style="margin-top: 34px; font-size: 14px" class="btn btn-outline-info">定期的に実行</button>`);
+      const dateSelectedHtml = $(`<div style="margin: 32px 10px 0px 10px; width: 200px;"></div>`);
+      const clearRecurringBtn = $(`<button style="margin-top: 34px; font-size: 14px; display: none" class="btn btn-outline-danger">Clear Recurring</button>`);
+      const makeRecurringHtml = $(kintone.app.record.getSpaceElement(MAKE_RECURRING_FIELD_CODE));
+      makeRecurringHtml.css({
+        'display': 'flex'
+      });
+      makeRecurringHtml.append(makeRecurringBtn, dateSelectedHtml, clearRecurringBtn);
+      $('.repeat-days').hide();
+      $('#repeat-fixed-days').hide();
+      clearRecurringBtn.click(function(){
+        repeatEventSettings = undefined;
+        clearRecurringBtn.hide();
+        dateSelectedHtml.text('');
+       kintone.app.record.setFieldShown(PLAN_DATE_FIELD_CODE, true);
+      })
+      makeRecurringBtn.click(function () {
+        const record = kintone.app.record.get().record;
+        if (!repeatEventSettings){
+          repeatEventSettings = {
+            startRepeatDate: moment().format('YYYY-MM-DD'),
+            endRepeatDate: moment().format('YYYY-MM-DD'),
+            options: {
+              repeatType: "day", 
+              repeatInterval: 1
+            }
+          }
+        }
+        
+        const options = repeatEventSettings.options;
+        
+        let intervalMode = options.repeatType;
+        let rule = options.rule;
+        
+        $("#repeat-interval").val(options.repeatInterval);
+        $('#repeat-start-date').val(repeatEventSettings.startRepeatDate);
+        $('#repeat-end-date').val(repeatEventSettings.endRepeatDate);
+        $('#interval-mode').val(options.repeatType);
+        
+        if (intervalMode === "day") {
+          
+        }
+        else if (intervalMode === "week") {
+            
+            let selectedDays = rule.split(', ').map(d => d.replace("on_", ""));
+    
+            $(".repeat-day").removeClass("repeat-day-selected"); // Reset all selections
+            selectedDays.forEach(day => {
+                let index = dayNames.indexOf(day);
+                if (index !== -1) {
+                    $(`.repeat-day[data-day="${index}"]`).addClass("repeat-day-selected");
+                }
+            });
+        }
+        else if (intervalMode === "month" || intervalMode === "year") {
+            $("#repeat-fixed-days").val(rule);
+        }
+        
+        $('#repeat-popup').fadeIn();
+      });
+      $('#repeat-start-date, #interval-mode').on('change', function(){
+        const startDate = $("#repeat-start-date").val();
+        const mode = $("#interval-mode").val();
+        if (mode == "month" || mode == "year"){
+          $('#repeat-fixed-days').show();
+          $('.repeat-days').hide();
+          const result = getDayAttributes(startDate, mode);
+          console.log('result', result);
+          $('#repeat-fixed-days').empty();
+          for (const item of result){
+            $('#repeat-fixed-days').append(`<option value=${item.value}>${item.label}</option>`)
+          }
+        }
+        else {
+          $('#repeat-fixed-days').hide();
+          if (mode == "day"){
+            $('.repeat-days').hide();
+          }
+          else $('.repeat-days').show();
+        }
+        
+      })
+      $('#interval-mode').on('change', function(){
+        const mode = $(this).val();
+        if (mode == "year") {
+          $('#repeat-interval').hide()
+        }
+        else {
+          $('#repeat-interval').show()
+        }
+      })
+      $('#close-popup, .repeat-discard').click(function () {
+          $('#repeat-popup').fadeOut();
+      });
+      $('.repeat-day').click(function () {
+          $(this).toggleClass('repeat-day-selected');
+      });
+      $('.repeat-save').click(function () {
+        const intervalMode = $('#interval-mode').val();
+        const repeatInterval = $('#repeat-interval').val();
+        let options;
+        
+        if (intervalMode == "day"){
+          options = {
+            repeatType: "day", 
+            repeatInterval: repeatInterval
+          }
+        }
+        else if (intervalMode == "week"){
+          options = { 
+            repeatType: "week", 
+            repeatInterval: repeatInterval,
+            rule: ($('.repeat-day-selected')
+              .map(function () { 
+                  return "on_" + dayNames[$(this).data('day')]; 
+              })
+              .get()).join(', ')
+          }
+        }
+        else if (intervalMode == "month"){
+          options = { 
+            repeatType: "month", 
+            repeatInterval: repeatInterval,
+            rule: $("#repeat-fixed-days").val()
+          }
+        }
+        else if (intervalMode == "year"){
+          options = { 
+            repeatType: "year", 
+            repeatInterval: 1,
+            rule: $("#repeat-fixed-days").val()
+          }
+        }
+        console.log('options', options);
+        const startRepeatDate = moment($('#repeat-start-date').val()).format('YYYY-MM-DD');
+        const endRepeatDate = moment($('#repeat-end-date').val()).format('YYYY-MM-DD');
+        const repeatDays = getRepeatDates(options, startRepeatDate, endRepeatDate);
+        console.log('repeatDays', repeatDays);
+        console.log('options', options);
+        
+        if (repeatDays.length == 0) {
+          $('#repeat-output').text("No days selected.");
+        }
+        else {
+          const record = kintone.app.record.get().record;
+          kintone.app.record.set({record: record});
+          kintone.app.record.setFieldShown(PLAN_DATE_FIELD_CODE, false);
+          repeatEventSettings.options = options;
+          repeatEventSettings.startRepeatDate = startRepeatDate;
+          repeatEventSettings.endRepeatDate = endRepeatDate;
+          $('#repeat-output').text("");
+          $('#repeat-popup').fadeOut();
+          clearRecurringBtn.show();
+          dateSelectedHtml.text(getRepeatDescription(options, startRepeatDate, endRepeatDate));
+        }
+      });
+      
+      return event;
+    })
+    /* customize section begin */
+    let listSections = [];
+    function changeOptionSectionDropDownList (fieldID, initValue = ""){
+      if (!fieldID){
+        $("#sectionID").empty();
+        $("#sectionID").append(`<option value="">-----</option>`);
+        $("#sectionID").val("");
+        $("#sectionID").trigger('change');
+        return;
+      }
+      getSectionByFieldID(fieldID).then((result) => {
+        listSections = result;
+        console.log('result', result);
+        $("#sectionID").empty();
+        $("#sectionID").append(`<option value="">-----</option>`);
+        for (const item of result){
+          const sectionName = item.value['区画名'].value;
+          $("#sectionID").append(`<option value="${sectionName}">${sectionName}</option>`);
+        }
+        $("#sectionID").val(initValue);
+        $("#sectionID").trigger('change');
+      }).catch(e => {
+        console.log(e);
+      })
+    }
+    
+    kintone.events.on([
+      `app.record.create.show`,
+      `app.record.edit.show`
+    ], (event) => {
+      let sectionDropDownList;
+      const record = event.record;  
+      if ($("#sectionID").length == 0){
+        sectionDropDownList = $('<select class="gaia-argoui-select" id="sectionID" style="width: 180px; height: 40px; padding: 0px 10px"></select>');
+        sectionDropDownList.empty();
+        sectionDropDownList.append(`<option value="">-----</option>`);
+        $(`.value-${ELEMENT_FIELD_ID[SECTION_FIELD_CODE]} input`).after(sectionDropDownList);
+      }
+      else {
+        sectionDropDownList = $("#sectionID");
+      }
+      $(`.value-${ELEMENT_FIELD_ID[SECTION_FIELD_CODE]} input`).hide();
+      
+      if (record[FIELD_ID_FIELD_CODE].value){
+        
+        changeOptionSectionDropDownList(record[FIELD_ID_FIELD_CODE].value, record[SECTION_FIELD_CODE].value);
+      }
+      
+      sectionDropDownList.change(function() {
+        setTimeout(() => {
+          const sectionValue = $(this).val();
+          const selectedSection = listSections.find(o => o.value['区画名'].value == sectionValue);
+          console.log('selectedSection', selectedSection);
+          const totalColumns = selectedSection ? selectedSection?.value?.['列名一覧']?.value?.split(';')?.length : 0;
+          const record = kintone.app.record.get().record;
+          record[SECTION_FIELD_CODE].value = sectionValue;
+          record[TOTAL_COLUMN_FIELD_CODE].value = totalColumns;
+          kintone.app.record.set({record: record});
+        }, 1)
+      });
+      return event;
+    });
+    kintone.events.on([
+      `app.record.create.change.${FIELD_ID_FIELD_CODE}`,
+      `app.record.edit.change.${FIELD_ID_FIELD_CODE}`
+    ], (event) => {
+      const record = event.record;
+      console.log('record', record);
+      const fieldID = record[FIELD_ID_FIELD_CODE].value;
+      console.log('fieldID', fieldID);
+      changeOptionSectionDropDownList(fieldID);
+      return event;
+    });
+    /* customize section end */
+    
+    /* duplicate event -> clear groupID */
+    kintone.events.on([
+      "app.record.create.show"
+    ], (event) => {
+      console.log('event', event); 
+      if (event.reuse){
+        event.record[GROUP_ID_FIELD_CODE].value = "";
+      }
+      event.record[SHAREPOINT_ID_FIELD_CODE].value = undefined;
+      event.record[SHAREPOINT_LAST_MODIFIED_FIELD_CODE].value = undefined;
+      return event;
+    })
+    
+    kintone.events.on([
+      `app.record.create.show`,
+      `app.record.edit.show`,
+      'app.record.detail.show'
+      ], (event) => {
+        kintone.app.record.setFieldShown(KINTONE_OR_SHAREPOINT_USER_FIELD_CODE, false);
+        return event;
+      }
+    )
+    
+    
+    kintone.events.on([
+      `app.record.create.change.${WORK_STATUS_FIELD_CODE}`, 
+      `app.record.edit.change.${WORK_STATUS_FIELD_CODE}`,
+      `app.record.create.show`,
+      `app.record.edit.show`
+      ], (event) => {
+      const record = event.record;
+      if (record[WORK_STATUS_FIELD_CODE].value == WORK_STATUS_NOT_START){
+        $("b:contains('工数情報')").closest('.row-gaia').hide()
+        kintone.app.record.setFieldShown(ACTUAL_WORKER_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(ACTUAL_EMAIL_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(ACTUAL_DATE_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(ACTUAL_WORKER_NAME_FIELD_CODE, false);
+        
+        kintone.app.record.setFieldShown(ACTUAL_START_DATE_TIME_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(ACTUAL_END_DATE_TIME_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(TOTAL_BREAK_TIME_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(TABLE_BREAK_TIME_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(TIME_SPENT_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(COLUMN_DETAIL_FIELD_CODE, false);
+        kintone.app.record.setFieldShown(ACTUAL_COLUMN_FIELD_CODE, false);
+        setTimeout(() => {
+          const record = kintone.app.record.get().record;
+          record[ACTUAL_EMAIL_FIELD_CODE].value = undefined;
+          record[ACTUAL_DATE_FIELD_CODE].value = undefined;
+          record[ACTUAL_START_DATE_TIME_FIELD_CODE].value = '';
+          record[ACTUAL_END_DATE_TIME_FIELD_CODE].value = '';
+          record[TOTAL_BREAK_TIME_FIELD_CODE].value = '00:00';
+          record[TIME_SPENT_FIELD_CODE].value = '00:00';
+          record[TABLE_BREAK_TIME_FIELD_CODE].value = [];
+          kintone.app.record.set({record: record});
+          
+        }, 100)
+        
+      }
+      else {
+        $("b:contains('工数情報')").closest('.row-gaia').show();
+        kintone.app.record.setFieldShown(ACTUAL_WORKER_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(ACTUAL_EMAIL_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(ACTUAL_DATE_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(ACTUAL_WORKER_NAME_FIELD_CODE, true);
+        
+        kintone.app.record.setFieldShown(ACTUAL_START_DATE_TIME_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(ACTUAL_END_DATE_TIME_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(TOTAL_BREAK_TIME_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(TABLE_BREAK_TIME_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(TIME_SPENT_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(COLUMN_DETAIL_FIELD_CODE, true);
+        kintone.app.record.setFieldShown(ACTUAL_COLUMN_FIELD_CODE, true);
+        
+        $(`.customize-require`).remove();
+        if (record[WORK_STATUS_FIELD_CODE].value == WORK_STATUS_COMPLETED){
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_START_DATE_TIME_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_END_DATE_TIME_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_WORKER_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_EMAIL_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_DATE_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_WORKER_NAME_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+        }
+        else if (record[WORK_STATUS_FIELD_CODE].value == WORK_STATUS_PROCESSING){
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_START_DATE_TIME_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_WORKER_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_EMAIL_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_DATE_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+          $(`.label-${ELEMENT_FIELD_ID[ACTUAL_WORKER_NAME_FIELD_CODE]}`).append(`<span class="customize-require require-cybozu">*</span>`);
+        }
+      }
+      return event;
+    });
+    
+    /* customize break time begin */
+    function changeOptionBreakTimeDropDownList (fieldID, initValue = ""){
+      if (!fieldID){
+        $("#sectionID").empty();
+        $("#sectionID").append(`<option value="">-----</option>`);
+      }
+      getSectionByFieldID(fieldID).then((result) => {
+        console.log('result', result);
+        $("#sectionID").empty();
+        $("#sectionID").append(`<option value="">-----</option>`);
+        for (const item of result){
+          const sectionName = item.value['区画名'].value;
+          $("#sectionID").append(`<option value="${sectionName}">${sectionName}</option>`);
+        }
+        $("#sectionID").val(initValue);
+      }).catch(e => {
+        console.log(e);
+      })
+    }
+    
+    kintone.events.on([
+      `app.record.create.show`,
+      `app.record.edit.show`,
+      `app.record.create.change.${TABLE_BREAK_TIME_FIELD_CODE}`,
+      `app.record.edit.change.${TABLE_BREAK_TIME_FIELD_CODE}`,
+      `app.record.create.change.${WORK_STATUS_FIELD_CODE}`, 
+      `app.record.edit.change.${WORK_STATUS_FIELD_CODE}`,
+    ], (event) => {
+      setTimeout(async () => {
+        let listBreakTimes = await breakTimeService.getListBreakTimes();
+        let listBreakTimeNames = listBreakTimes.map(o => o[BREAK_TIME_NAME_FIELD_CODE].value);
+        listBreakTimeNames.push("カスタマイズ");
+        console.log('listBreakTimes', listBreakTimes);
+        const record = kintone.app.record.get().record;
+        $('.break-time-dropdown-list').remove();
+        for (const [index, row] of record[TABLE_BREAK_TIME_FIELD_CODE].value.entries()){
+          let breakTimeDropDownList = $('<select class="gaia-argoui-select break-time-dropdown-list" style="width: 180px; height: 40px; padding: 0px 10px"></select>');
+          breakTimeDropDownList.empty();
+          breakTimeDropDownList.append(`<option value="">-----</option>`);
+          for (const breakTimeName of listBreakTimeNames){
+            breakTimeDropDownList.append(`<option value="${breakTimeName}">${breakTimeName}</option>`);
+          }
+          if (row.value[BREAK_TIME_NAME_FIELD_CODE].value){
+            breakTimeDropDownList.val(row.value[BREAK_TIME_NAME_FIELD_CODE].value);
+          }
+          $(`.value-${ELEMENT_FIELD_ID[BREAK_TIME_NAME_FIELD_CODE]} input`).eq(index).after(breakTimeDropDownList);
+          breakTimeDropDownList.on('change', function(){
+            const breakTimeNameVal = $(this).val();
+            const breakTime = listBreakTimes.find(o => o[BREAK_TIME_NAME_FIELD_CODE].value == breakTimeNameVal);
+            let record = kintone.app.record.get().record;
+            record[TABLE_BREAK_TIME_FIELD_CODE].value[index].value[BREAK_TIME_NAME_FIELD_CODE].value = breakTimeNameVal;
+            record[TABLE_BREAK_TIME_FIELD_CODE].value[index].value[START_BREAK_TIME_FIELD_CODE].value = breakTime ? breakTime[MASTER_START_BREAK_TIME_FIELD_CODE].value : undefined;
+            kintone.app.record.set({record: record});
+            setTimeout(() => {
+              const record = kintone.app.record.get().record;
+              record[TABLE_BREAK_TIME_FIELD_CODE].value[index].value[END_BREAK_TIME_FIELD_CODE].value = breakTime ? breakTime[MASTER_END_BREAK_TIME_FIELD_CODE].value : undefined;
+              kintone.app.record.set({record: record});
+            }, 250)
+            
+          })
+        }
+        $(`.value-${ELEMENT_FIELD_ID[BREAK_TIME_NAME_FIELD_CODE]} input`).hide();
+      }, 100);
+      return event;
+    });
+    /* customize break time end */
+    
+    function scrollToCustomizeError(){
+      $('html, body').animate({
+        scrollTop: $('.customize-error').first().offset().top
+      }, 100);
+    }
+    function customizeValidate(record){
+      $('.customize-error').remove();
+      // customize validate start date and end date
+      if (record[PLAN_START_DATE_TIME_FIELD_CODE].value && record[PLAN_END_DATE_TIME_FIELD_CODE].value){
+        const startDate = record[PLAN_START_DATE_TIME_FIELD_CODE].value.split(":").map(o => +o);
+        const endDate = record[PLAN_END_DATE_TIME_FIELD_CODE].value.split(":").map(o => +o);
+        
+        if (startDate[0] * 60 + startDate[1] > endDate[0] * 60 + endDate[1]){
+          $(`.field-${ELEMENT_FIELD_ID[PLAN_START_DATE_TIME_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${START_MUST_LESS_THEN_END}</div>`);
+          scrollToCustomizeError();
+          return false;
+        }
+      }
+      
+      if (record[WORK_STATUS_FIELD_CODE].value == WORK_STATUS_COMPLETED){
+        if (
+          
+          !record[ACTUAL_START_DATE_TIME_FIELD_CODE].value || !record[ACTUAL_END_DATE_TIME_FIELD_CODE].value ||
+          
+          !record[ACTUAL_DATE_FIELD_CODE].value || !record[ACTUAL_EMAIL_FIELD_CODE].value ||
+          
+          !record[ACTUAL_WORKER_FIELD_CODE].value || !record[ACTUAL_WORKER_NAME_FIELD_CODE].value
+          
+        ){
+          if (!record[ACTUAL_START_DATE_TIME_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_START_DATE_TIME_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          } 
+          if (!record[ACTUAL_END_DATE_TIME_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_END_DATE_TIME_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          }
+          if (!record[ACTUAL_DATE_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_DATE_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          } 
+          if (!record[ACTUAL_EMAIL_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_EMAIL_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          }
+          if (!record[ACTUAL_WORKER_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_WORKER_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          }
+          if (!record[ACTUAL_WORKER_NAME_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_WORKER_NAME_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          }
+          scrollToCustomizeError();
+          return false;
+        }
+        
+      }
+      else if (record[WORK_STATUS_FIELD_CODE].value == WORK_STATUS_PROCESSING){
+        if (
+          
+          !record[ACTUAL_START_DATE_TIME_FIELD_CODE].value ||
+          
+          !record[ACTUAL_DATE_FIELD_CODE].value || !record[ACTUAL_EMAIL_FIELD_CODE].value ||
+          
+          !record[ACTUAL_WORKER_FIELD_CODE].value || !record[ACTUAL_WORKER_NAME_FIELD_CODE].value
+          
+        ){
+          if (!record[ACTUAL_START_DATE_TIME_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_START_DATE_TIME_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          } 
+          if (!record[ACTUAL_DATE_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_DATE_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          } 
+          if (!record[ACTUAL_EMAIL_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_EMAIL_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          }
+          if (!record[ACTUAL_WORKER_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_WORKER_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          }
+          if (!record[ACTUAL_WORKER_NAME_FIELD_CODE].value){
+            $(`.field-${ELEMENT_FIELD_ID[ACTUAL_WORKER_NAME_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${REQUIRED}</div>`);
+          }
+          scrollToCustomizeError();
+          return false;
+        }
+        
+      }
+      if (record[ACTUAL_START_DATE_TIME_FIELD_CODE].value && record[ACTUAL_END_DATE_TIME_FIELD_CODE].value){
+        const startDate = record[ACTUAL_START_DATE_TIME_FIELD_CODE].value.split(":").map(o => +o);
+        const endDate = record[ACTUAL_END_DATE_TIME_FIELD_CODE].value.split(":").map(o => +o);
+        
+        if (startDate[0] * 60 + startDate[1] > endDate[0] * 60 + endDate[1]){
+          $(`.field-${ELEMENT_FIELD_ID[ACTUAL_START_DATE_TIME_FIELD_CODE]}`).append(`<div class="customize-error input-error-cybozu">${START_MUST_LESS_THEN_END}</div>`);
+          scrollToCustomizeError();
+          return false;
+        }
+      }
+      return true;
+    }
+    kintone.events.on(['app.record.create.submit'], async (event) => {
+      const record = event.record;
+      if (!customizeValidate(record)) return false;
+      if (
+           !record[PLAN_DATE_FIELD_CODE].value
+        || !record[PLAN_START_DATE_TIME_FIELD_CODE].value
+        || !record[PLAN_END_DATE_TIME_FIELD_CODE].value
+        
+        || !record[FIELD_SHAREPOINT_ID_FIELD_CODE].value 
+        || !record[FIELD_FIELD_CODE].value 
+        || !record[FIELD_ID_FIELD_CODE].value
+        || !record[SECTION_FIELD_CODE].value 
+        
+        || !record[WORK_SHAREPOINT_ID_FIELD_CODE].value
+        || !record[WORK_ID_FIELD_CODE].value 
+        || !record[WORK_NAME_FIELD_CODE].value
+        
+      ) return event;
+      
+      const records = [];
+      if (multiUserForPlan.length === 0){
+        // const recordTmp = JSON.parse(JSON.stringify(record));
+        // recordTmp[EMPLOYEE_ID_FIELD_CODE].value = undefined;
+        // recordTmp[EMPLOYEE_NAME_FIELD_CODE].value = undefined;
+        // recordTmp[EMAIL_FIELD_CODE].value = undefined;
+        // records.push(recordTmp);
+        multiUserForPlan.push({
+          [KINTONE_OR_SHAREPOINT_USER_FIELD_CODE]: { value: undefined },
+          [FULL_NAME_FIELD_CODE]: {value: undefined},
+          [EMAIL_FIELD_CODE]: {value: undefined}
+        })
+      }
+      let repeatDays = [];
+      
+      
+      if (repeatEventSettings){
+        repeatDays = getRepeatDates(repeatEventSettings.options, repeatEventSettings.startRepeatDate, repeatEventSettings.endRepeatDate);
+      }
+      if (repeatDays.length == 0){
+        const selectedDate = record[PLAN_DATE_FIELD_CODE].value || moment().format('YYYY-MM-DD');
+        repeatDays = [selectedDate];
+      }
+      // check pc allowed
+      const pcAllowed = await MF_USER_DEVICE_PERMISSION_PLUGIN.checkPCAllowed();
+      
+      for (let i = 0; i < multiUserForPlan.length; i++){
+        let groupID;
+        if (repeatEventSettings){
+          groupID = uuidv4();
+        }
+        for (const date of repeatDays){  
+          const recordTmp = JSON.parse(JSON.stringify(record));
+          const item = multiUserForPlan[i];
+          // const userId = item[EMPLOYEE_ID_FIELD_CODE].value;
+          // const userData = await getUserMasterById(userId);
+          // recordTmp[EMPLOYEE_ID_FIELD_CODE].value = userId;
+          // recordTmp[EMPLOYEE_NAME_FIELD_CODE].value =  item[FULL_NAME_FIELD_CODE].value;
+          recordTmp[USER_TYPE_CREATE_FIELD_CODE].value = pcAllowed ? USER_TYPE_ADMIN : USER_TYPE_FARMER;
+          recordTmp[EMAIL_FIELD_CODE].value = item[EMAIL_FIELD_CODE].value;
+          recordTmp[PLAN_DATE_FIELD_CODE].value = date;
+          if (groupID){
+            recordTmp[GROUP_ID_FIELD_CODE].value = groupID;
+          }
+          records.push(recordTmp);
+        }
+      }
+      console.log('record', record);
+      console.log('records', records);
+      loadingModal.show();
+      await addMultipleRecords(records);
+      loadingModal.show();
+      parent.postMessage("PLAN_REGISTRATION_SUCCESS", "*");
+      return false;
+    });
+    
+    
+    kintone.events.on(['app.record.edit.submit'], async (event) => {
+      const record = event.record;
+      if (!customizeValidate(record)) return false;
+      if (
+           !record[PLAN_DATE_FIELD_CODE].value
+        || !record[PLAN_START_DATE_TIME_FIELD_CODE].value
+        || !record[PLAN_END_DATE_TIME_FIELD_CODE].value
+        
+        || !record[FIELD_SHAREPOINT_ID_FIELD_CODE].value 
+        || !record[FIELD_FIELD_CODE].value 
+        || !record[FIELD_ID_FIELD_CODE].value
+        || !record[SECTION_FIELD_CODE].value 
+        
+        || !record[WORK_SHAREPOINT_ID_FIELD_CODE].value
+        || !record[WORK_ID_FIELD_CODE].value 
+        || !record[WORK_NAME_FIELD_CODE].value
+        
+      ) return event;
+      
+      
+      
+      const groupdID = record[GROUP_ID_FIELD_CODE].value;
+      const urlParams = new URLSearchParams(window.location.search || window.location.hash);
+      const groupAction = urlParams.get('groupAction');
+      console.log('groupAction', groupAction);
+      let groupEvents = [];
+      if (!groupAction || groupAction == "THIS_EVENT"){
+        groupEvents = [record];
+      }
+      else {
+        groupEvents = await workService.getGroupEvents(groupdID, record['予定日'].value, groupAction);
+      }
+      console.log(groupEvents);
+      if (planIsAssigned){
+        const recordsToUpdate = [];
+        for (const item of groupEvents){
+          const obj = {
+            id: item['$id'].value,
+            record: {
+              "計画_開始時刻": { 
+                value: record["計画_開始時刻"].value 
+              },
+              "計画_終了時刻": { 
+                value: record["計画_終了時刻"].value 
+              },
+              [FIELD_SHAREPOINT_ID_FIELD_CODE]: { 
+                value: record[FIELD_SHAREPOINT_ID_FIELD_CODE].value 
+              },
+              [CROP_SHAREPOINT_ID_FIELD_CODE]: { 
+                value: record[CROP_SHAREPOINT_ID_FIELD_CODE].value 
+              },
+              [WORK_SHAREPOINT_ID_FIELD_CODE]: { 
+                value: record[WORK_SHAREPOINT_ID_FIELD_CODE].value 
+              },
+              "区画": { 
+                value: record["区画"].value 
+              },
+              "列数": {
+                value: record["列数"].value
+              },
+              "メールアドレス": {
+                value: record["メールアドレス"].value
+              }
+            }
+          }
+          if (item['$id'].value == record["$id"].value){
+            obj.record["予定日"] = {
+              value: record["予定日"].value
+            }
+            obj.record["作業ステータス"] = {
+              value: record["作業ステータス"].value
+            }
+            obj.record["実際_メールアドレス"] = {
+              value: record["実際_メールアドレス"].value
+            }
+            obj.record["作業日"] = {
+              value: record["作業日"].value
+            }
+            obj.record["実績_開始時刻"] = {
+              value: record["実績_開始時刻"].value
+            }
+            obj.record["実績_終了時刻"] = {
+              value: record["実績_終了時刻"].value
+            }
+            obj.record["休憩履歴"] = {
+              value: record["休憩履歴"].value
+            }
+          }
+          recordsToUpdate.push(obj);
+        }
+        const updateResult = await workService.updateEvents(recordsToUpdate);
+        console.log('updateResult', updateResult);
+        loadingModal.show();
+        for (const item of updateResult.records){
+          const recordId = item.id;
+          const record = await workService.getWorkById(recordId);
+          await MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.updateSharePointItem(record).then(result => console.log(result)).catch(error => console.log(error));
+        }
+        loadingModal.hide();
+        parent.postMessage("PLAN_EDIT_SUCCESS", "*");
+      }
+      else {
+        const records = [];
+        if (multiUserForPlan.length === 0){
+          multiUserForPlan.push({
+            [FULL_NAME_FIELD_CODE]: {value: undefined},
+            [EMAIL_FIELD_CODE]: {value: undefined}
+          })
+        }
+        let repeatDays = groupEvents.map(o => o['予定日'].value);
+        const sharepointMapping = MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT?.sharepointMapping;
+        
+        for (let i = 0; i < multiUserForPlan.length; i++){
+          let groupID = uuidv4();
+          for (const date of repeatDays){  
+            const recordTmp = JSON.parse(JSON.stringify(record));
+            const item = multiUserForPlan[i];
+            recordTmp[EMAIL_FIELD_CODE].value = item[EMAIL_FIELD_CODE].value;
+            recordTmp[PLAN_DATE_FIELD_CODE].value = date;
+            recordTmp[GROUP_ID_FIELD_CODE].value = groupID;
+            delete recordTmp['$id'];
+            delete recordTmp['$revision'];
+            delete recordTmp[sharepointMapping.ID.kintoneField];
+            delete recordTmp[sharepointMapping.Modified.kintoneField];
+            delete recordTmp[RECORD_NUMBER_FIELD_CODE];
+            
+            records.push(recordTmp);
+          }
+        }
+        console.log('record', record);
+        console.log('records', records);
+        loadingModal.show();
+        await addMultipleRecords(records);
+        
+        for (const workData of groupEvents){
+          const eventId = workData['$id'].value;
+          await workService.removeWorkById(eventId);
+          if (sharepointMapping?.ID?.kintoneField && workData?.[sharepointMapping.ID.kintoneField]?.value){
+            MF_PLUGIN_CONNECTOR_FOR_SHAREPOINT.deleteSharePointItem(workData[sharepointMapping.ID.kintoneField].value);
+          }
+        }
+        loadingModal.hide();
+        parent.postMessage("PLAN_REGISTRATION_SUCCESS", "*");
+      }
+      
+      
+      return false;
+    });
+    
+    // kintone.events.on(['app.record.edit.submit.success'], async (event) => {
+    //   const record = event.record;
+      
+    //   parent.postMessage("PLAN_EDIT_SUCCESS", "*");
+    //   return event;
+    // });
+    
+  })();
+    

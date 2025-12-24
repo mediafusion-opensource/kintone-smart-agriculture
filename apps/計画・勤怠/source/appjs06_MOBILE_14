@@ -1,0 +1,38 @@
+(() => {
+  'use strict';
+  window.MF_AGRI_LANGUAGES = {
+    'ja': {
+      'WEEK_UPPERCASE': '週',
+      'MONTH_UPPERCASE': '月',
+      'TODAY_UPPERCASE': '今日',
+      'DAY_UPPERCASE': '日',
+      'PERSON_MODE_UPPERCASE': '人',
+      'WORK_MODE_UPPERCASE': '作業',
+      "DELETE_CONFIRMATION": "削除します。よろしいですか？",
+      "REGISTER_ACHIEVEMENT": "実績を登録",
+      "REGISTER_PLAN": "計画を登録",
+      "EDIT_PLAN": "計画を編集",
+      "EDIT_ACHIEVEMENT": "実績を編集",
+      "PLAN_REGISTRATION_SUCCESS": "計画の登録が成功しました",
+      "PLAN_REGISTRATION_FAILURE": "計画の登録が失敗しました",
+      "PLAN_EDIT_SUCCESS": "計画の編集が成功しました",
+      "PLAN_EDIT_FAILURE": "計画の編集が失敗しました",
+      "PLAN_DELETION_SUCCESS": "計画の削除が成功しました",
+      "PLAN_DELETION_FAILURE": "計画の削除が失敗しました",
+      "ACTUAL_REGISTRATION_SUCCESS": "実績の登録が成功しました",
+      "ACTUAL_REGISTRATION_FAILURE": "実績の登録が失敗しました",
+      "ACTUAL_EDIT_SUCCESS": "実績の編集が成功しました",
+      "ACTUAL_EDIT_FAILURE": "実績の編集が失敗しました",
+      "ACTUAL_DELETION_SUCCESS": "実績の削除が成功しました",
+      "ACTUAL_DELETION_FAILURE": "実績の削除が失敗しました"
+    },
+    'en': {
+      'WEEK_UPPERCASE': 'WEEK',
+      'MONTH_UPPERCASE': 'MONTH',
+      'TODAY_UPPERCASE': 'TODAY',
+      'DAY_UPPERCASE': 'DAY',
+      'PERSON_MODE_UPPERCASE': 'PERSON MODE',
+      'WORK_MODE_UPPERCASE': 'WORK MODE'
+    }
+  }
+})();

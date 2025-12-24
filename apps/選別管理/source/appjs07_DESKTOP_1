@@ -1,0 +1,230 @@
+(() => {
+  'use strict';
+  async function createCursor (body) {
+    return new Promise((resolve, reject) => {
+      kintone.api(kintone.api.url('/k/v1/records/cursor', true), 'POST', body, function (resp) {
+          resolve(resp);
+      }, function (error) {
+          reject(error);
+      });
+    });
+  }
+  async function getRecordByCursor (cursor) {
+    const body = {
+        'id': cursor.id
+    };
+    return new Promise((resolve, reject) => {
+      kintone.api(kintone.api.url('/k/v1/records/cursor', true), 'GET', body, function (resp) {
+          // success
+          let records = resp.records;
+          if (resp.next) {
+              resolve(getRecordByCursor(cursor)
+                  .then(nextRecords => records.concat(nextRecords)).catch(e => {
+                      console.error(e);
+                  }));
+          }
+          resolve(records);
+      }, function (error) {
+          // error
+          reject(error);
+      });
+    })
+  }
+  async function getProductInventory(productCodes){
+    try {
+    const resp = await kintone.api(
+      kintone.api.url('/k/v1/records', true),
+      'GET',
+      {
+        app: INVENTORY_MANAGEMENT_APP_ID,
+        query: `商品 in (${productCodes.map(code => `"${code}"`).join(', ')}) limit 500 offset 0`
+      }
+    );
+      return resp.records;
+    } catch (error) {
+      return [];
+    }
+  }
+  async function getAllRecords (body) {
+    const cursor = await createCursor(body);
+    let allRecords = await getRecordByCursor(cursor);
+    return allRecords;
+  }
+  
+  const MESSAGES = {
+    'ja': {
+      'CONFIRM_DELETE':'削除します。よろしいですか？',
+      'ERROR_DUPLICATED': '値が既に存在します。',
+      'CANNOT_DELETE':'CANNOT_DELETE',
+    },
+    'en': {
+      'CONFIRM_DELETE':'Are you sure you want to delete?',
+      'ERROR_DUPLICATED': 'The value already exists.',
+      'CANNOT_DELETE':'CANNOT_DELETE',
+    }
+  }
+  const language = kintone.getLoginUser().language || 'en';
+  const locales = MESSAGES[language];
+  const APP_ID = kintone.app.getId();
+  const FORM_DATA = cybozu.data.page['FORM_DATA'];
+  const ELEMENT_FIELD_ID = {};
+  const fieldList = FORM_DATA.schema.table.fieldList;
+  for (const fieldId of Object.keys(fieldList)) {
+    ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+  }
+  for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+    ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+    const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+  }
+  kintone.events.on([
+    'app.record.create.submit',
+    'app.record.edit.submit'
+  ], async (event) => {
+    const record = event.record;
+    const allRecords = await getAllRecords({app: APP_ID, size: 500});
+    const existSortBatch = [];
+    for (const item of allRecords){
+      if (item['$id'].value != record?.['$id']?.value){
+        for (const row of item['選別データ'].value){
+          if (!existSortBatch.includes(row.value['選別ロット番号'].value)){
+            existSortBatch.push(row.value['選別ロット番号'].value)
+          }
+        } 
+      }
+    }
+    console.log('existSortBatch', existSortBatch);
+    $('.input-error-cybozu-customize').remove();
+    const table = record['選別データ'].value;
+    const productList = [];
+    let check = true;
+    for (const [index, item] of table.entries()){
+      if (!existSortBatch.includes(item.value['選別ロット番号'].value)){
+        if (item.value['選別ロット番号'].value) existSortBatch.push(item.value['選別ロット番号'].value);
+      }
+      else {
+        $(`.field-${ELEMENT_FIELD_ID['選別ロット番号']}`).eq(index).append(`<div class="input-error-cybozu input-error-cybozu-customize">${locales['ERROR_DUPLICATED']}</div>`);
+        check = false;
+      }
+      if (!productList.includes(item.value['商品'].value)){
+        if (item.value['商品'].value) productList.push(item.value['商品'].value)
+      }
+      else {
+        $(`.field-${ELEMENT_FIELD_ID['商品']}`).eq(index).append(`<div class="input-error-cybozu input-error-cybozu-customize">${locales['ERROR_DUPLICATED']}</div>`);
+        check = false;
+      }
+    }
+    record['商品一覧'].value = productList.join('、');
+    if (!check) return false;
+    return event;
+  });
+  kintone.events.on([
+    'app.record.create.show', 
+    'app.record.edit.show'
+  ], (event) => {
+      const record = event.record;
+      record['商品一覧'].disabled = true;
+      return event;
+  });
+  
+  kintone.events.on([
+    'app.record.create.show',
+    'app.record.edit.show',
+    'app.record.create.change.選別データ',
+    'app.record.edit.change.選別データ',
+  ],  (event) => {
+    const subtable = '選別データ'
+    const record = event.record;
+    console.log('record', record);
+      
+    const subtableFieldId = ELEMENT_FIELD_ID[subtable];
+    // fake button remove
+    for (const [index, item] of record[subtable].value.entries()){
+      if (!item.id) continue;
+      const trSelector = $(`.subtable-${subtableFieldId} tbody tr`).eq(index);
+      trSelector.find('.remove-row-image-gaia').not(':first').remove();
+      const realRemoveBtn = trSelector.find('.remove-row-image-gaia');
+      const tdParent = realRemoveBtn.parent();
+      const fakeRemoveBtn = realRemoveBtn.clone();
+      realRemoveBtn.addClass('display-none');
+      realRemoveBtn.after(fakeRemoveBtn);
+      fakeRemoveBtn.removeClass('display-none');
+      fakeRemoveBtn.on('click', async function(){
+        // check reference 出荷 納品 app
+        if (item.value['出荷_納品'].value){
+          alert('この行は出荷・納品アプリ のレコードに連携されているため削除できません。');
+          return;
+        }
+        // check reference 在庫管理 app
+        const products = await getProductInventory([item.value['商品'].value]);
+        if (products.length > 0){
+          alert('この行は在庫管理アプリ のレコードに連携されているため削除できません。');
+          return;
+        }
+        const result = confirm(locales['CONFIRM_DELETE']);
+        if (!result) return;
+        realRemoveBtn.click();
+      })
+      if (index == 0 && record[subtable].value.length == 1) fakeRemoveBtn.hide();
+    }
+    return event;
+  });
+  
+  kintone.events.on([
+    'app.record.detail.delete.submit',
+    'app.record.index.delete.submit',
+  ],  async (event) => {
+    const record = event.record;
+    const productIds = record['選別データ'].value.map(o => o.value['商品'].value);
+    for (const row of record['選別データ'].value){
+      if (row.value['出荷_納品'].value){
+        alert('この行は出荷・納品アプリ のレコードに連携されているため削除できません。');
+        return false;
+      }
+    }
+    // check reference 在庫管理 app
+    const products = await getProductInventory(productIds);
+    if (products.length > 0){
+      alert('この行は在庫管理アプリ のレコードに連携されているため削除できません。');
+      return false;
+    }
+    return event;
+  });
+  
+  // clear mask field value after duplicate record
+  kintone.events.on([
+    'app.record.create.show'
+  ], (event) => {
+    console.log('event', event);
+    const reuse = event.reuse;
+    const record = event.record;
+    if (reuse){
+      for (const row of record['選別データ'].value){
+        row.value['出荷_納品'].value = '';
+      }
+    }
+    return event;
+  });
+  
+      kintone.events.on([
+        'app.record.create.show',
+        'app.record.edit.show',
+        'app.record.detail.show'
+    ], async (event) => {
+      const targetElement = $(`.subtable-${ELEMENT_FIELD_ID[`選別データ`]} tbody`)[0];
+      const config = { childList: true, subtree: true };
+      const callback = function(mutationsList, observer) {
+          mutationsList.forEach(function(mutation) {
+               $(`.label-${ELEMENT_FIELD_ID[`出荷_納品`]}`).hide();
+               $(`.field-${ELEMENT_FIELD_ID[`出荷_納品`]}`).closest('td').hide();
+          });
+      };
+      const observer = new MutationObserver(callback);
+      observer.observe(targetElement, config);
+      $(`.label-${ELEMENT_FIELD_ID[`出荷_納品`]}`).hide();
+      $(`.field-${ELEMENT_FIELD_ID[`出荷_納品`]}`).closest('td').hide();
+      return event;
+    })
+})();

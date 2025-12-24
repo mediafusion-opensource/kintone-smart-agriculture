@@ -1,0 +1,549 @@
+(function ($) {
+  'use strict';
+  function truncateToTwoDecimals(number) {
+    return Math.trunc(number * 100) / 100;
+  }
+  const mfAgriService = window.MF_AGRI_COST_BY_CROPPING;
+
+  const lang = kintone.getLoginUser()?.['language'] || 'en';
+  const locales = window.MF_AGRI_COST_BY_CROPPING_LANGUAGES[lang];
+  const APP_ID = kintone.app.getId();
+
+  const SELECT_OPTION_CALC = 'オプションを選択';
+  const OPTION_CALC_1 = 'オプション①';
+  const OPTION_CALC_2 = 'オプション②';
+
+  let SALARY_CSV_FILE;
+  let BONUS_CSV_FILE;
+
+  let fileContentSalary;
+  let fileContentBonus;
+  let hasChangeFile = false;
+
+  const FORM_DATA = cybozu.data.page['FORM_DATA'];
+  const ELEMENT_FIELD_ID = {};
+  const fieldList = FORM_DATA.schema.table.fieldList;
+  for (const fieldId of Object.keys(fieldList)) {
+    ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+  }
+  for (const subTableId of Object.keys(FORM_DATA.schema.subTable)) {
+    ELEMENT_FIELD_ID[FORM_DATA.schema.subTable[subTableId].var] = subTableId;
+    const fieldList = FORM_DATA.schema.subTable[subTableId].fieldList;
+    for (const fieldId of Object.keys(fieldList)) {
+      ELEMENT_FIELD_ID[fieldList[fieldId].var] = fieldId;
+    }
+  }
+  console.log('ELEMENT_FIELD_ID', ELEMENT_FIELD_ID);
+
+  kintone.events.on([
+    'app.record.index.edit.show'
+  ], function (event) {
+    event.record['開始日'].disabled = true;
+    event.record['終了日'].disabled = true;
+    event.record['freee取得_給与'].disabled = true;
+    event.record['freee取得_賞与'].disabled = true;
+    return event;
+  })
+  kintone.events.on([
+    'app.record.create.show',
+    'app.record.edit.show',
+  ], function (event) {
+    event.record['開始日'].disabled = true;
+    event.record['終了日'].disabled = true;
+    event.record['freee取得_給与'].disabled = true;
+    event.record['freee取得_賞与'].disabled = true;
+
+    const modalDiv = $('<div>', {
+      id: 'modalLoading',
+      class: 'modal',
+      html: `
+            <div class="modal-content-customize">
+              <div class="loader"></div>
+              <p>${locales['CALCULATING']}</p>
+            </div>
+          `,
+    });
+    $('body').append(modalDiv);
+    let lastRecord;
+    modalDiv.hide();
+    try {
+      lastRecord = JSON.parse(localStorage.getItem('freee_last_record'));
+      localStorage.removeItem('freee_last_record')
+    }
+    catch (e) {
+      // lastRecord;
+    }
+    const spaceCalcBtn = $(kintone.app.record.getSpaceElement('calcBtn'));
+    const spaceUpdateCredentialBtn = $(kintone.app.record.getSpaceElement('updateCredentialBtn'));
+    const calcBtn = $(`<button type="button" class="btn btn-sm btn-primary" style="margin-left: 10px">${locales['CALC']}</button>`);
+    const updateCredentialBtn = $(`<button type="button" class="btn btn-sm btn-success" style="margin-left: 10px">${locales['UPDATE_AUTHENTICATION']}</button>`);
+    spaceCalcBtn.append(calcBtn);
+    spaceUpdateCredentialBtn.append(updateCredentialBtn);
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code') || localStorage.getItem('freee_code');
+    if (code) {
+      localStorage.setItem('freee_code', code)
+      if (event.type === 'app.record.create.show') {
+        if (lastRecord) {
+          const recordId = lastRecord?.$id?.value;
+          if (recordId) {
+            window.location.href = 'https://' + window.location.hostname + '/k/' + APP_ID + `/show?code=${code}&hasCache=true#record=${recordId}&mode=edit`
+          }
+          else {
+            setTimeout(() => {
+              kintone.app.record.set({ record: lastRecord });
+            }, 1)
+          }
+        }
+      }
+      else if (event.type === 'app.record.edit.show') {
+        const hasCache = urlParams.get('hasCache');
+        if (hasCache == 'true') {
+          setTimeout(() => {
+            kintone.app.record.set({ record: lastRecord });
+          }, 1)
+        }
+      }
+    }
+
+
+    const targetMonthFieldId = ELEMENT_FIELD_ID['対象給与年月'];
+    const targetMonthElement = $(`.field-${targetMonthFieldId} input`);
+    targetMonthElement.before($('<input class="input-text-cybozu" id="monthpicker" style="height: 0px; border: 0px"/>'));
+    targetMonthElement.attr('readonly', true);
+
+    $('#monthpicker').datepicker({
+      language: "ja",
+      minViewMode: 1,
+      maxViewMode: 2,
+      todayHighlight: true
+    }).on("changeDate", async function (e) {
+      const date = moment(e.date);
+      const record = kintone.app.record.get().record;
+      record['対象給与年月'].value = date.format("YYYY/MM");
+      kintone.app.record.set({ record: record });
+    });
+
+    targetMonthElement.on('click', function () {
+      $('#monthpicker').focus();
+    });
+    updateCredentialBtn.on('click', function () {
+      mfAgriService.updateClientIdAndClientSecret();
+    })
+    calcBtn.on('click', async function () {
+      $('.input-error-cybozu-customize').remove();
+      const record = kintone.app.record.get().record;
+      record['作業リスト'].value = [];
+      kintone.app.record.set({ record: record });
+      const yearMonth = record['対象給与年月'].value;
+      const kintoneEmployee = record['社員コード'].value;
+
+      if (!yearMonth) {
+        $(`.value-${ELEMENT_FIELD_ID['対象給与年月']}`).append(`<div class="input-error-cybozu input-error-cybozu-customize"><span>${locales['REQUIRED']}.</span></div>`)
+        return;
+      }
+      if (!kintoneEmployee) {
+        $(`.value-${ELEMENT_FIELD_ID['社員コード']}`).append(`<div class="input-error-cybozu input-error-cybozu-customize"><span>${locales['REQUIRED']}.</span></div>`)
+        return;
+      }
+
+      modalDiv.show();
+      let SALARY = 0;
+      let BONUS = 0;
+      let startDate;
+      let endDate;
+      let employeeNum;
+      let result;
+
+      if (record[SELECT_OPTION_CALC].value == OPTION_CALC_1) {
+        const success = await mfAgriService.getToken();
+        if (!success) {
+          modalDiv.hide();
+          return;
+        }
+        record['作業リスト'].value = [];
+        record['freee取得_賞与'].value = undefined;
+        record['freee取得_給与'].value = undefined;
+        record['開始日'].value = undefined;
+        record['終了日'].value = undefined;
+
+        kintone.app.record.set({ record: record });
+        const year = +yearMonth.split('/')[0];
+        const month = +yearMonth.split('/')[1];
+        result = await mfAgriService.fetchAllEmployees(year, month);
+        if (result.status_code == "400") {
+          alert(locales['GET_EMPLOYEE_ERROR_400']);
+          modalDiv.hide();
+          return;
+        }
+        else if (result.status_code == "401") {
+          modalDiv.hide();
+          return;
+        }
+        else if (result.status_code == "500") {
+          alert(locales['FREEE_ERROR_500']);
+          modalDiv.hide();
+          return;
+        }
+        console.log('employees', result.employees);
+        const employee = result.employees.find(o => o['num'] == kintoneEmployee);
+        if (!employee) {
+          alert(locales['GET_EMPLOYEE_ERROR_404']);
+          modalDiv.hide();
+          return;
+        }
+        console.log('employee', employee);
+        employeeNum = employee.num;
+        result = await mfAgriService.getSalaryOrBonusOfUserFreee('salaries', employee.id, year, month);
+        if (["400"].includes(result.status_code)) {
+          alert(`${locales[`GET_SALARY_ERROR_${result.status_code}`]}`);
+          modalDiv.hide();
+          return;
+        }
+        else if (result.status_code === "500") {
+          alert(`${locales['FREEE_ERROR_500']}`);
+          modalDiv.hide();
+          return;
+        }
+        console.log('salaryData', result.dataFreee);
+        startDate = result?.dataFreee?.['start_date'];
+        endDate = result?.dataFreee?.['closing_date'];
+        if (startDate) record['開始日'].value = startDate;
+        if (endDate) record['終了日'].value = endDate;
+        kintone.app.record.set({ record: record });
+
+        SALARY = +result?.dataFreee?.['total_taxable_payment_amount'] || 0;
+        record['freee取得_給与'].value = result?.dataFreee?.fixed ? 'Successful' : 'Errors';
+
+        result = await mfAgriService.getSalaryOrBonusOfUserFreee('bonuses', employee.id, year, month);
+        if (["400"].includes(result.status_code)) {
+          alert(`${locales[`GET_BONUS_ERROR_${result.status_code}`]}`);
+          modalDiv.hide();
+          return;
+        }
+        else if (result.status_code === "500") {
+          alert(`${locales['FREEE_ERROR_500']}`);
+          modalDiv.hide();
+          return;
+        }
+
+        console.log('bonusData', result.dataFreee);
+        BONUS = +result?.dataFreee?.['total_taxable_payment_amount'] || 0;
+        record['freee取得_賞与'].value = result?.dataFreee?.fixed ? 'Successful' : 'Errors';
+
+        if (record['freee取得_給与'].value == 'Errors') {
+          kintone.app.record.set({ record: record });
+          modalDiv.hide();
+          return;
+        }
+      }
+      else if (record[SELECT_OPTION_CALC].value == OPTION_CALC_2) {
+        if (SALARY_CSV_FILE) {
+          console.log('SALARY_CSV_FILE', SALARY_CSV_FILE);
+
+          if (SALARY_CSV_FILE.length > 0 && SALARY_CSV_FILE[0]['従業員番号']) {
+            startDate = moment(SALARY_CSV_FILE[0]['給与計算開始日（固定給）']).format('YYYY-MM-DD');
+            endDate = moment(SALARY_CSV_FILE[0]['給与計算締日（固定給）']).format('YYYY-MM-DD');
+            if (startDate) record['開始日'].value = startDate;
+            if (endDate) record['終了日'].value = endDate;
+          }
+
+          const dataCurrentEmployee = SALARY_CSV_FILE.find(o => o['従業員番号'] == kintoneEmployee);
+          if (dataCurrentEmployee) {
+            SALARY = +dataCurrentEmployee['総支給額'];
+            record['freee取得_給与'].value = 'Successful';
+            employeeNum = dataCurrentEmployee['従業員番号']
+          }
+          else {
+            record['freee取得_給与'].value = 'Errors';
+          }
+        }
+        if (BONUS_CSV_FILE) {
+          console.log('BONUS_CSV_FILE', BONUS_CSV_FILE);
+          const dataCurrentEmployee = BONUS_CSV_FILE.find(o => o['従業員番号'] == kintoneEmployee);
+          if (dataCurrentEmployee) {
+            BONUS = +dataCurrentEmployee['総支給額'];
+            record['freee取得_賞与'].value = 'Successful';
+          }
+          else {
+            record['freee取得_賞与'].value = 'Errors';
+          }
+        }
+      }
+
+      if (!startDate || !endDate || !employeeNum) {
+        record['作業リスト'].value = [];
+        kintone.app.record.set({ record: record });
+        modalDiv.hide();
+        return;
+      }
+      kintone.app.record.set({ record: record });
+
+      const TOTAL = SALARY + BONUS;
+      result = await mfAgriService.fetchTimesheetByEmployeeAndTime(employeeNum, startDate, endDate);
+      console.log('timesheetData', result.timesheetData);
+      if (["400", "403"].includes(result.status_code)) {
+        alert(`${locales[`GET_TIMESHEET_ERROR_${result.status_code}`]}`);
+        modalDiv.hide();
+        return;
+      }
+      else if (result.status_code === "500") {
+        alert(`${locales['KINTONE_ERROR_500']}`);
+        modalDiv.hide();
+        return;
+      }
+      if (result?.timesheetData?.length == 0) {
+        alert(`${locales['TIMESHEET_NOT_EXIST']}`);
+        modalDiv.hide();
+        return;
+      }
+
+      const croppingMap = {};
+      let total = 0;
+      for (const item of result.timesheetData) {
+        if (!croppingMap[item['作付'].value]) croppingMap[item['作付'].value] = {};
+        if (!croppingMap[item['作付'].value][item['圃場'].value]) croppingMap[item['作付'].value][item['圃場'].value] = 0;
+        const hours = truncateToTwoDecimals((+item['作業時間'].value.split(':')[0]) + (+item['作業時間'].value.split(':')[1] / 60));
+        croppingMap[item['作付'].value][item['圃場'].value] += hours;
+        total += hours;
+      }
+      console.log('croppingMap', croppingMap);
+      console.log('total', total);
+
+      let remain = 100;
+      let maxIndex = 0;
+      let maxPercent = 0;
+      for (const [index, cropping] of Object.keys(croppingMap).entries()) {
+        const fieldMap = croppingMap[cropping];
+        for (const field of Object.keys(fieldMap)) {
+          const percent = truncateToTwoDecimals(fieldMap[field] * 100 / total);
+          if (percent > maxPercent) {
+            maxPercent = percent;
+            maxIndex = index;
+          }
+          remain -= percent;
+          record['作業リスト'].value.push({
+            value: {
+              '作付': { type: 'SINGLE_LINE_TEXT', value: cropping },
+              '圃場': { type: 'SINGLE_LINE_TEXT', value: field },
+              '作業時間': { type: 'NUMBER', value: fieldMap[field] },
+              'パーセント': { type: 'NUMBER', value: percent },
+              '別人件費配賦': { type: 'NUMBER', value: undefined }
+            }
+          })
+        }
+      }
+
+      if (remain > 0) {
+        record['作業リスト'].value[maxIndex].value['パーセント'].value = truncateToTwoDecimals((+record['作業リスト'].value[maxIndex].value['パーセント'].value) + (+remain.toFixed(2)))
+      }
+      for (const item of record['作業リスト'].value) {
+        item.value['別人件費配賦'].value = Math.round(item.value['パーセント'].value * TOTAL);
+      }
+      console.log('remain', remain);
+      console.log('record', record);
+      kintone.app.record.set({ record: record });
+      modalDiv.hide();
+    })
+    return event;
+  });
+
+
+  kintone.events.on([
+    'app.record.create.show',
+    'app.record.edit.show',
+  ], async function (event) {
+    hasChangeFile = false;
+
+    $(`.value-${ELEMENT_FIELD_ID['給料のCSVファイル']}`).hide();
+    $(`.value-${ELEMENT_FIELD_ID['賞与のCSVファイル']}`).hide();
+    const divSalary = $('<div>');
+    const inputSalary = $('<input id="salaryFile" type="file"/>');
+    const removeFileSalary = $('<i type="button" id="removeFileSalary" class="fa fa-close" style="color:red; display: none"></i>');
+    divSalary.append(inputSalary, removeFileSalary);
+
+    removeFileSalary.on('click', function () {
+      inputSalary.val('');
+      fileContentSalary = undefined;
+      hasChangeFile = true;
+      removeFileSalary.hide();
+    });
+
+    const divBonus = $('<div>');
+    const inputBonus = $('<input id="bonusFile" type="file"/>');
+    const removeFileBonus = $('<i type="button" id="removeFileBonus" class="fa fa-close" style="color:red; display: none"></i>');
+    divBonus.append(inputBonus, removeFileBonus);
+
+    removeFileBonus.on('click', function () {
+      inputBonus.val('');
+      fileContentBonus = undefined;
+      hasChangeFile = true;
+      removeFileBonus.hide();
+    });
+
+    $(`.label-${ELEMENT_FIELD_ID['給料のCSVファイル']}`).after(divSalary);
+    $(`.label-${ELEMENT_FIELD_ID['賞与のCSVファイル']}`).after(divBonus);
+
+    $(`.field-${ELEMENT_FIELD_ID['給料のCSVファイル']}, .field-${ELEMENT_FIELD_ID['賞与のCSVファイル']}`).css({
+      "border": "solid 1px #e3e7e8",
+      "padding": "10px",
+      "margin": "8px"
+    })
+    console.log('event', event);
+
+    $(inputSalary).on('change', async function (event) {
+      const record = kintone.app.record.get().record;
+      const file = event.target.files[0];
+      if (!file) {
+        if (fileContentSalary) {
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(fileContentSalary);
+          $('#salaryFile')[0].files = dataTransfer.files;
+          $('#removeFileSalary').show();
+        }
+        return;
+      }
+      $('#removeFileSalary').show();
+      hasChangeFile = true;
+      Papa.parse(file, {
+        header: true,
+        complete: (results) => {
+          SALARY_CSV_FILE = results.data
+        }
+      });
+      fileContentSalary = file;
+    });
+
+    $(inputBonus).on('change', async function (event) {
+      const file = event.target.files[0];
+      if (!file) {
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(fileContentSalary);
+        $('#salaryFile')[0].files = dataTransfer.files;
+        $('#removeFileBonus').show();
+        return;
+      }
+      $('#removeFileBonus').show();
+      hasChangeFile = true;
+      Papa.parse(file, {
+        header: true,
+        complete: (results) => {
+          BONUS_CSV_FILE = results.data
+        }
+      });
+      fileContentBonus = file;
+    });
+
+
+    if (event.type == 'app.record.edit.show') {
+      const record = await mfAgriService.getRecord(APP_ID, event.record['$id'].value);
+      console.log('record', record);
+      const fileKeySalary = record['給料のCSVファイル'].value?.[0]?.fileKey;
+      if (fileKeySalary) {
+        const blob = await mfAgriService.getFileContent(fileKeySalary);
+        console.log('blob', blob);
+        fileContentSalary = new File([blob], record['給料のCSVファイル'].value?.[0]?.name, { type: blob.type });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(fileContentSalary);
+        $('#salaryFile')[0].files = dataTransfer.files;
+        $('#removeFileSalary').show();
+        Papa.parse(fileContentSalary, {
+          header: true,
+          complete: (results) => {
+            SALARY_CSV_FILE = results.data
+          }
+        });
+      }
+      const fileKeyBonus = record['賞与のCSVファイル'].value?.[0]?.fileKey;
+      if (fileKeyBonus) {
+        const blob = await mfAgriService.getFileContent(fileKeyBonus);
+        console.log('blob', blob);
+        fileContentBonus = new File([blob], record['賞与のCSVファイル'].value?.[0]?.name, { type: blob.type });
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(fileContentBonus);
+        $('#bonusFile')[0].files = dataTransfer.files;
+        $('#removeFileBonus').show();
+        Papa.parse(fileContentBonus, {
+          header: true,
+          complete: (results) => {
+            BONUS_CSV_FILE = results.data
+          }
+        });
+      }
+    }
+    return event;
+  })
+
+
+
+  kintone.events.on([
+    'app.record.create.submit.success',
+    'app.record.edit.submit.success',
+  ], async function (event) {
+    const record = event.record;
+    if (hasChangeFile) {
+      await mfAgriService.updateCSVFieldWithQuery(APP_ID, `対象給与年月 = "${record["対象給与年月"].value}"`, fileContentSalary, fileContentBonus);
+    }
+    return event;
+  })
+
+  kintone.events.on([
+    'app.record.create.change.対象給与年月',
+    'app.record.edit.change.対象給与年月',
+  ], function (event) {
+    const record = event.record;
+    $("#salaryFile").val("");
+    $("#bonusFile").val("");
+    $('#removeFileSalary').hide();
+    $('#removeFileBonus').hide();
+    kintone.api(kintone.api.url('/k/v1/records', true), 'GET', {
+      'app': APP_ID,
+      'query': `対象給与年月 = "${record['対象給与年月'].value}"`
+    }, async function (response) {
+      const records = response.records;
+      if (records.length > 0) {
+        const record = records[0];
+        const fileKeySalary = record['給料のCSVファイル'].value?.[0]?.fileKey;
+        if (fileKeySalary) {
+          const blob = await mfAgriService.getFileContent(fileKeySalary);
+          console.log('blob', blob);
+          fileContentSalary = new File([blob], record['給料のCSVファイル'].value?.[0]?.name, { type: blob.type });
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(fileContentSalary);
+          $('#salaryFile')[0].files = dataTransfer.files;
+          $('#removeFileSalary').show();
+
+          Papa.parse(fileContentSalary, {
+            header: true,
+            complete: (results) => {
+              SALARY_CSV_FILE = results.data
+            }
+          });
+
+          hasChangeFile = true;
+        }
+        const fileKeyBonus = record['賞与のCSVファイル'].value?.[0]?.fileKey;
+        if (fileKeyBonus) {
+          const blob = await mfAgriService.getFileContent(fileKeyBonus);
+          console.log('blob', blob);
+          fileContentBonus = new File([blob], record['賞与のCSVファイル'].value?.[0]?.name, { type: blob.type });
+          const dataTransfer = new DataTransfer();
+          dataTransfer.items.add(fileContentBonus);
+          $('#bonusFile')[0].files = dataTransfer.files;
+          $('#removeFileBonus').show();
+          Papa.parse(fileContentBonus, {
+            header: true,
+            complete: (results) => {
+              BONUS_CSV_FILE = results.data
+            }
+          });
+
+          hasChangeFile = true;
+        }
+      }
+    });
+    return event;
+  })
+
+
+})(jQuery);

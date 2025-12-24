@@ -1,25 +1,29 @@
 ================================================================================
-スマート農業労務会計システム ライセンス条項
-Smart Agriculture Labor & Accounting System - License Terms
+スマート農業労務会計システム - kintoneデータ管理アプリ
+Smart Agriculture Labor & Accounting System - kintone Data Management App
 ================================================================================
 
 Copyright (c) 2025 Media Fusion Inc.
-Webサイト / Website: https://www.mediafusion.co.jp/
-所在地/ Address:
-■大阪本社
-〒530-0004
-大阪市北区堂島浜１丁目１番８号　角屋堂島パークビル
-TEL：06-6341-8250
-■東京オフィス
-〒101-0041
-東京都千代田区神田須田町2-25　GYB秋葉原
-TEL：050-3164-3774
-■ハノイR＆Dセンター
-Tan Hong Ha Complex, No 2 Vuong Thua Vu Street, Khuong Trung Urban, Thanh Xuan District, Ha Noi City, Vietnam
+https://www.mediafusion.co.jp/
 
 ================================================================================
-第1部：MITライセンス（オープンソース部分）
-Part 1: MIT License (Open Source Components)
+【対象範囲】
+================================================================================
+
+本ライセンスは、以下のコンポーネントのみを対象としています：
+
+  ✓ kintoneデータ管理アプリ（本リポジトリ）
+
+以下のコンポーネントは本ライセンスの対象外です：
+
+  ✗ Microsoft 365スマートフォンアプリ（有償・別途契約）
+
+Microsoft 365スマートフォンアプリについては、当社Webサイトをご参照ください：
+https://www.mediafusion.co.jp/smart-agriculture/
+
+================================================================================
+第1部：MITライセンス
+Part 1: MIT License
 ================================================================================
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -40,9 +44,28 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+---
+
+【参考：日本語訳】
+
+本ソフトウェアおよび関連文書ファイル（以下「ソフトウェア」）のコピーを取得する
+すべての人に対し、ソフトウェアを無制限に扱うことを無償で許可します。これには、
+ソフトウェアの複製、改変、結合、出版、頒布、サブライセンス、および/または販売
+する権利、およびソフトウェアを提供する相手に同じことを許可する権利が含まれます。
+ただし、以下の条件に従うものとします。
+
+上記の著作権表示および本許諾表示を、ソフトウェアのすべてのコピーまたは重要な
+部分に含めるものとします。
+
+ソフトウェアは「現状のまま」で提供され、明示または黙示を問わず、商品性、特定
+目的への適合性、および非侵害の保証を含むがこれに限定されない、いかなる種類の
+保証もありません。著者または著作権者は、契約行為、不法行為、またはその他の
+行為であるかを問わず、ソフトウェアまたはソフトウェアの使用またはその他の取引
+に起因または関連して生じる、いかなる請求、損害、またはその他の責任についても
+責任を負いません。
+
 ================================================================================
-第2部：Media Fusion追加条件（日本語）
-Part 2: Media Fusion Additional Terms (Japanese)
+第2部：Media Fusion追加条件
 ================================================================================
 
 本ソフトウェアの利用にあたり、上記MITライセンスに加えて、以下の追加条件が
@@ -54,7 +77,7 @@ Part 2: Media Fusion Additional Terms (Japanese)
 【2. クレジット表示義務】
 本ソフトウェアを利用する場合、以下のクレジット表示が必要です：
 - アプリケーション内の適切な場所（例：設定画面、About画面）に
-  「Powered by Media Fusion Inc.」または「Media Fusion Inc.提供」と表示すること
+  「Powered by Media Fusion Inc.」または「Media Fusion Inc.提供」と表示
 - ドキュメントやマニュアルに著作権表示を含めること
 
 【3. 再配布・商用利用の制限】
@@ -68,72 +91,27 @@ Part 2: Media Fusion Additional Terms (Japanese)
 - 技術サポート、カスタマイズ開発、導入支援が必要な場合は、
   Media Fusion Inc.までお問い合わせください（有償）
 
-【5. Microsoft 365連携アプリについて】
-- kintoneデータ管理アプリ（本リポジトリ）：無償（MITライセンス）
-- Microsoft 365スマートフォンアプリ：有償（別途ライセンス契約が必要）
-  ※10人を超えるユーザーがスマートフォンからアクセスする場合に推奨
-
-【6. 免責事項】
+【5. 免責事項】
 本ソフトウェアの利用により生じたいかなる損害についても、Media Fusion Inc.は
 責任を負いません。利用者の責任において使用してください。
 
-【7. 準拠法】
+【6. 準拠法】
 本ライセンスは日本法に準拠します。
 
 ================================================================================
-Part 3: Media Fusion Additional Terms (English)
-================================================================================
-
-In addition to the MIT License above, the following additional terms apply to
-the use of this software.
-
-[1. Target Users]
-This software is provided free of charge primarily for small and medium-sized
-agricultural businesses.
-
-[2. Attribution Requirements]
-When using this software, the following attribution is required:
-- Display "Powered by Media Fusion Inc." in an appropriate location within
-  the application (e.g., Settings screen, About screen)
-- Include copyright notice in documentation and manuals
-
-[3. Redistribution and Commercial Use Restrictions]
-- Prior written permission from Media Fusion Inc. is required to sell or
-  redistribute this software, whether in original or modified form, to
-  third parties
-- Internal use and customization within your organization is permitted
-  without prior approval
-- Derivative works must inherit these license terms
-
-[4. Technical Support]
-- This software is provided "AS IS" and does not include free technical support
-- For technical support, customization, or implementation assistance,
-  please contact Media Fusion Inc. (paid service)
-
-[5. Microsoft 365 Integration App]
-- kintone Data Management App (this repository): Free (MIT License)
-- Microsoft 365 Smartphone App: Paid (separate license agreement required)
-  *Recommended when more than 10 users need smartphone access
-
-[6. Disclaimer]
-Media Fusion Inc. shall not be liable for any damages arising from the use of
-this software. Use at your own risk.
-
-[7. Governing Law]
-This license shall be governed by the laws of Japan.
-
-================================================================================
-お問い合わせ / Contact Information
+お問い合わせ
 ================================================================================
 
 Media Fusion Inc.
-Website: https://www.mediafusion.co.jp/
+Web: https://www.mediafusion.co.jp/
 GitHub: https://github.com/mediafusion-opensource/kintone-smart-agriculture
 
-本ライセンスに関するご質問、商用利用の許可申請、技術サポートのご依頼は
-上記連絡先までお問い合わせください。
+■大阪本社
+〒530-0004 大阪市北区堂島浜１丁目１番８号 角屋堂島パークビル
+TEL：06-6341-8250
 
-For questions about this license, commercial use permission requests, or
-technical support inquiries, please contact us using the information above.
+■東京オフィス
+〒101-0041 東京都千代田区神田須田町2-25 GYB秋葉原
+TEL：050-3164-3774
 
 ================================================================================

@@ -329,7 +329,6 @@ Dự án bao gồm các ứng dụng sau:
 
 **Media Fusion Inc.**
 - Website: https://www.mediafusion.co.jp/
-- Email: (Tham khảo trong README.md)
 
 ---
 

@@ -329,7 +329,6 @@ apps/
 
 **Media Fusion Inc.**
 - ウェブサイト: https://www.mediafusion.co.jp/
-- メール: (README.mdを参照)
 
 ---
 

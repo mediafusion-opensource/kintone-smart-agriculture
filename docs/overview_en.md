@@ -329,7 +329,6 @@ For technical support or deployment consultation, please contact:
 
 **Media Fusion Inc.**
 - Website: https://www.mediafusion.co.jp/
-- Email: (See README.md)
 
 ---
 

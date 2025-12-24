@@ -43,6 +43,8 @@ Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者
 ---
 
 ## インストール
+[overview_en.md](overview_en.md)あるいは[overview_ja.md](ooverview_ja.md)
+のファイルに参考してください。
 
 ### 前提条件
 
@@ -58,6 +60,9 @@ Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者
 ---
 
 ## ドキュメント
+使用のガイドライン
+ [overview_en.md](overview_en.md)
+ [overview_ja.md](ooverview_ja.md)
 
 ---
 
@@ -114,13 +119,6 @@ Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者
 〒530-0004
 大阪市北区堂島浜１丁目１番８号　角屋堂島パークビル
 TEL：06-6341-8250
-■東京オフィス
-〒101-0041
-東京都千代田区神田須田町2-25　GYB秋葉原
-TEL：050-3164-3774
-■ハノイR＆Dセンター
-Tan Hong Ha Complex, No 2 Vuong Thua Vu Street, Khuong Trung Urban, Thanh Xuan District, Ha Noi City, Vietnam
-
 
 ---
 

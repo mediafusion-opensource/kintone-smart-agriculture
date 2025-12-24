@@ -43,6 +43,7 @@ Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者
 ---
 
 ## インストール
+overview_en.mdあるいはoverview_ja.mdのファイルに参考してください。
 
 ### 前提条件
 
@@ -58,6 +59,9 @@ Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者
 ---
 
 ## ドキュメント
+使用のガイドライン
+overview_en.md
+overview_ja.md
 
 ---
 

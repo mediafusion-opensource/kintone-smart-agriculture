@@ -43,7 +43,8 @@ Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者
 ---
 
 ## インストール
-overview_en.mdあるいはoverview_ja.mdのファイルに参考してください。
+[overview_en.md](overview_en.md)あるいは[overview_ja.md](ooverview_ja.md)
+のファイルに参考してください。
 
 ### 前提条件
 
@@ -60,8 +61,8 @@ overview_en.mdあるいはoverview_ja.mdのファイルに参考してくださ�
 
 ## ドキュメント
 使用のガイドライン
-overview_en.md
-overview_ja.md
+ [overview_en.md](overview_en.md)
+ [overview_ja.md](ooverview_ja.md)
 
 ---
 

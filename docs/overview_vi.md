@@ -4,7 +4,7 @@
 
 Dự án **Nông nghiệp thông minh** là một hệ thống quản lý nông nghiệp được xây dựng trên nền tảng kintone, cung cấp các template và ứng dụng sẵn có để hỗ trợ quản lý toàn diện các hoạt động nông nghiệp từ quy hoạch, canh tác, thu hoạch đến bán hàng và kế toán.
 
-Hệ thống này được phát triển bởi Media Fusion Inc. như một hoạt động đóng góp xã hội, cung cấp miễn phí cho các doanh nghiệp nông nghiệp quy mô vừa và nhỏ.
+Hệ thống này được phát triển bởi Media Fusion Co.,Ltd. như một hoạt động đóng góp xã hội, cung cấp miễn phí cho các doanh nghiệp nông nghiệp quy mô vừa và nhỏ.
 
 ## Cấu trúc dự án
 
@@ -310,7 +310,7 @@ Dự án bao gồm các ứng dụng sau:
 ### Về bản quyền
 
 - Dự án được cung cấp miễn phí cho mục đích nông nghiệp
-- Yêu cầu ghi nhận "Powered by Media Fusion Inc."
+- Yêu cầu ghi nhận "Powered by Media Fusion Co.,Ltd."
 - Cần xin phép trước khi sử dụng thương mại hoặc phân phối lại
 
 ---
@@ -327,7 +327,7 @@ Dự án bao gồm các ứng dụng sau:
 
 Để được hỗ trợ kỹ thuật hoặc tư vấn triển khai, vui lòng liên hệ:
 
-**Media Fusion Inc.**
+**Media Fusion Co.,Ltd.**
 - Website: https://www.mediafusion.co.jp/
 
 ---

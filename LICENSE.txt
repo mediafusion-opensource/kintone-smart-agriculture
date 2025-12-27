@@ -3,7 +3,7 @@
 Smart Agriculture Labor & Accounting System - kintone Data Management App
 ================================================================================
 
-Copyright (c) 2025 Media Fusion Inc.
+Copyright (c) 2025 Media Fusion Co.,Ltd.
 https://www.mediafusion.co.jp/
 
 ================================================================================
@@ -77,22 +77,22 @@ SOFTWARE.
 【2. クレジット表示義務】
 本ソフトウェアを利用する場合、以下のクレジット表示が必要です：
 - アプリケーション内の適切な場所（例：設定画面、About画面）に
-  「Powered by Media Fusion Inc.」または「Media Fusion Inc.提供」と表示
+  「Powered by Media Fusion Co.,Ltd.」または「Media Fusion Co.,Ltd.提供」と表示
 - ドキュメントやマニュアルに著作権表示を含めること
 
 【3. 再配布・商用利用の制限】
 - 本ソフトウェアをそのまま、または改変して第三者に販売・再配布する場合は、
-  事前にMedia Fusion Inc.の書面による許可が必要です
+  事前にMedia Fusion Co.,Ltd.の書面による許可が必要です
 - 自社内での利用、カスタマイズは許可なく行えます
 - 派生物を作成した場合も、本ライセンス条項を継承する必要があります
 
 【4. 技術サポート】
 - 本ソフトウェアは「現状のまま」提供され、無償での技術サポートは含まれません
 - 技術サポート、カスタマイズ開発、導入支援が必要な場合は、
-  Media Fusion Inc.までお問い合わせください（有償）
+  Media Fusion Co.,Ltd.までお問い合わせください（有償）
 
 【5. 免責事項】
-本ソフトウェアの利用により生じたいかなる損害についても、Media Fusion Inc.は
+本ソフトウェアの利用により生じたいかなる損害についても、Media Fusion Co.,Ltd.は
 責任を負いません。利用者の責任において使用してください。
 
 【6. 準拠法】
@@ -102,7 +102,7 @@ SOFTWARE.
 お問い合わせ
 ================================================================================
 
-Media Fusion Inc.
+Media Fusion Co.,Ltd.
 Web: https://www.mediafusion.co.jp/
 GitHub: https://github.com/mediafusion-opensource/kintone-smart-agriculture
 

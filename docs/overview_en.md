@@ -4,7 +4,7 @@
 
 The **Smart Agriculture** project is an agricultural management system built on the kintone platform, providing ready-made templates and applications to support comprehensive management of agricultural activities from planning, cultivation, harvesting to sales and accounting.
 
-This system is developed by Media Fusion Inc. as a social contribution activity, provided free of charge to small and medium-sized agricultural businesses.
+This system is developed by Media Fusion Co.,Ltd. as a social contribution activity, provided free of charge to small and medium-sized agricultural businesses.
 
 ## Project Structure
 
@@ -310,7 +310,7 @@ The project includes the following applications:
 ### About License
 
 - The project is provided free of charge for agricultural purposes
-- Requires acknowledgment "Powered by Media Fusion Inc."
+- Requires acknowledgment "Powered by Media Fusion Co.,Ltd."
 - Permission required before commercial use or redistribution
 
 ---
@@ -327,7 +327,7 @@ The project includes the following applications:
 
 For technical support or deployment consultation, please contact:
 
-**Media Fusion Inc.**
+**Media Fusion Co.,Ltd.**
 - Website: https://www.mediafusion.co.jp/
 
 ---

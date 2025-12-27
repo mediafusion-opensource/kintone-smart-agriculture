@@ -12,7 +12,7 @@ kintone × Microsoft 365 ハイブリッドソリューション
 
 **スマート農業労務会計システム**は、kintoneの柔軟なデータ管理機能とMicrosoft 365のスマートフォン対応機能を組み合わせた、農業事業者向けの業務管理システムです。
 
-Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者の皆様に**無償で提供**しています。
+Media Fusion Co.,Ltd.の社会貢献活動として、中小規模の農業事業者の皆様に**無償で提供**しています。
 
 ---
 
@@ -111,7 +111,7 @@ Media Fusion Inc.の社会貢献活動として、中小規模の農業事業者
 
 ##  お問い合わせ
 
-**Media Fusion Inc.**
+**Media Fusion Co.,Ltd.**
 
 - Website: https://www.mediafusion.co.jp/
 - 所在地: 
@@ -138,6 +138,6 @@ TEL：06-6341-8250
 
 ---
 
-© 2025 Media Fusion Inc. All Rights Reserved.
+© 2025 Media Fusion Co.,Ltd. All Rights Reserved.
 
 創業30周年 - 農業DXで社会貢献
